@@ -103,5 +103,7 @@ theme: maupassant
 # Deployment
 ## Docs: https://hexo.io/docs/one-command-deployment
 deploy:
-  type: ''
+  type: 'git'
+  repo: git@github.com:tahw/tahw.github.io.git
+  branch: master
 
