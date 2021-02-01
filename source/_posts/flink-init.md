@@ -70,15 +70,13 @@ date: 2021-01-10 19:26:00
 
 ### flink 架构图
 1. state
-    - 数据直接存在本地内存
-    - <font color='red'>**低延迟**</font>
-    - 集群
+	- 数据直接存在本地内存
+	- 集群
+	- <font color='red'>**低延迟**</font>
+	- <font color='red'>**高吞吐**</font>
 2. checkpoint
 	- 持久化
-    - 故障容错
+	- 故障容错
 3. Exactly-once
-	- 
 	- 数据正确
 ![flink](/images/pasted-0.png)
-        - 可以明显<font color='red'>**降低将数据移动到目的端的延迟**</font>。此外，由于它能够持续消费和发送数据，因此用途更广，支持用例更多
-        - 可以明显<font color='red'>**降低将数据移动到目的端的延迟**</font>。此外，由于它能够持续消费和发送数据，因此用途更广，支持用例更多
