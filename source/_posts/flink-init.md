@@ -81,5 +81,5 @@ date: 2021-01-10 19:26:00
 	- 数据正确
 ![flink](/images/pasted-0.png)
 
-### flink cdc例子
-
+### flink cdc(change data capture) etl例子
+https://github.com/ververica/flink-cdc-connectors/wiki/%E4%B8%AD%E6%96%87%E6%95%99%E7%A8%8B
