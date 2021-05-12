@@ -46,10 +46,44 @@ date: 2021-04-22 21:01:00
 
 ![数据同步过程](/images/pasted-32.png)
 
+## 同步规则分析
+1. 不允许一个线程无原因地把数据（没有经过任何assign操作）从工作内存同步到主内存中
+2. 一个新的变量只能在主内存中诞生，不允许在工作内存中直接使用一个未被初始化变量。
+3. 一个变量在同一时刻只允许一条线程对其进行lock操作，但lock操作可以被同一线程重复执行多次，多次执行lock后，只有执行相同次数的unlock操作，才有可能被其他线程给获取。lock和unlock必须成对出现
+4. 如果对一个变量执行lock操作，将会清空工作内存中此变量的值，在执行引擎使用这个变量之前需要重新执行load或assign操作初始化变量的值
+5. 如果一个变量事先没有被lock操作锁定，则不允许对它执行unlock操作；也不允许去 unlock一个被其他线程锁定的变量。
+6. 对一个变量执行unlock操作之前，必须先把此变量同步到主内存中（执行store和write 操作）
 
-# 三大特性
 
-## 可见性
+# 三大特性问题
+
+## 原子性问题
+&nbsp;&nbsp;&nbsp;&nbsp;原子性指的是一个操作是不可中断的，即使在多线程的环境下，一个操作一旦开始就不会被其他线程影响。在并发情况下可以使用synchronized关键字来解决原子性,
+后面会着重讲解<font color='red'><b>`synchronized`和`lock`</b></font>
+```
+# 
+private static int count = 0;
+
+    static Object o = new Object();
+
+    public static void main(String[] args) throws InterruptedException {
+        for (int i = 0; i < 10; i++) {
+            new Thread(new Runnable() {
+                public void run() {
+                    for (int j = 0; j <1000; j++) {
+                        synchronized (o) { //一个线程只能进入一次
+                            count++; //不会发生指令重排
+                        }
+                    }
+                }
+            }).start();
+        }
+        Thread.sleep(200);
+        System.out.println(count);
+    }
+```
+
+## 可见性问题
 
 下面这个会出现可见性问题
 ```java
@@ -75,9 +109,10 @@ date: 2021-04-22 21:01:00
     }
 ```
 
-可见性解决方案
+可见性解决方案，后面会着重讲解<font color='red'><b>`volatile`和`synchronized`</b></font>
+
 ```java
-	# 第一种方案
+	# 第一种方案（volatile可以解决可见性问题，通过MESI来控制）
 	private static volatile boolean initFlag = false;
 
     public static void main(String[] args) throws InterruptedException {
@@ -99,8 +134,8 @@ date: 2021-04-22 21:01:00
         }).start();
     }
     
-    # 第二种方案
-	private static volatile boolean initFlag = false;
+    # 第二种方案（原因有可能是i和initFlag在一个cacheline上面，导致获取i的时候initFlag也读取到最新的）
+	private static boolean initFlag = false;
     
     // 如果换成int类型就不可以了
     private static Integer i = 0; 
@@ -125,8 +160,8 @@ date: 2021-04-22 21:01:00
         }).start();
     }
     
-    # 第三种方案
-	private static volatile boolean initFlag = false;
+    # 第三种方案（原因有可能是i和initFlag在一个cacheline上面，导致获取i的时候initFlag也读取到最新的）
+	private static boolean initFlag = false;
     
     private static volatile int i = 0;
 
@@ -150,8 +185,8 @@ date: 2021-04-22 21:01:00
         }).start();
     }
     
-    # 第四种方案
-	private static volatile boolean initFlag = false;
+    # 第四种方案（为什么加上sout就会可以，因为空循环的优先级非常高，一旦获取cpu，很难切换时间片的）
+	private static boolean initFlag = false;
 
     public static void main(String[] args) throws InterruptedException {
         new Thread(new Runnable() {
@@ -174,7 +209,7 @@ date: 2021-04-22 21:01:00
     }
     
     # 第五种方案（jvm 增加-Djava.compiler=NONE 这是关掉jvm jit编译，jit编译优化是：编译过一次，下次再执行的时候就不用再次编译了，类似于for循环，就非常好）
-	private static volatile boolean initFlag = false;
+	private static boolean initFlag = false;
     
     // 注意这里是int类型
     private static int i = 0; 
@@ -200,8 +235,76 @@ date: 2021-04-22 21:01:00
     }
 ```
 
+## 有序性问题
 
-## 原子性
+```java
+private static Integer x, y = 0;
+    private static Integer a, b = 0;
+
+    public static void main(String[] args) throws InterruptedException {
+        int i=0;
+        for (;;){
+            i++;
+            x=0;y=0;
+            a=0;b=0;
+            Thread t1 = new Thread(new Runnable() {
+                public void run() {
+                    // 等待
+                    sleep();
+                    a = 1;
+                    x = b;
+                }
+            });
+            Thread t2 = new Thread(new Runnable() {
+                public void run() {
+                    // 等待
+                    sleep();
+                    b = 1;
+                    y = a;
+                }
+            });
+            t1.start();
+            t2.start();
+            t1.join();
+            t2.join();
+            if(x ==0 && y ==0){
+                System.out.println("第"+i+"次"+",x="+x+",y="+y);
+                break;
+            }else{
+                System.out.println("第"+i+"次"+",x="+x+",y="+y);
+            }
+        }
+    }
+
+    private static void sleep() {
+        try {
+            Thread.sleep(1);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+```
+当x和y都是0的时候就发生指令重排，可以通过<font color='red'><b>`volatile`</b></font>来解决。
+![分析](/images/pasted-33.png)
+
+### happens-before原则
+&nbsp;&nbsp;&nbsp;&nbsp;每个线程都有自己的工作内存。每个线程对变量的操作都必须在工作内存中进行，而不是直接对主内存进行操作。并且每个线程不能访问其他线程的工作内存。在java内存模型中存在一些先天的“有序性”，即不需要通过任何手段就能够得到程序的有序性。这个就是happens-before原则。如果两个操作无法从happens-before原则推导出来，那么他们就不能保证有序性。
+那happens-before原则原则就是如下：
+1. 程序顺序原则，即在一个线程内必须保证语义串行性，也就是说按照代码顺序执行。
+2. 锁规则 解锁(unlock)操作必然发生在后续的同一个锁的加锁(lock)之前，也就是说，如果对于一个锁解锁后，再加锁，那么加锁的动作必须在解锁动作之后(同一个 锁)。 
+3. volatile规则 volatile变量的写，先发生于读，这保证了volatile变量的可见性，简 单的理解就是，volatile变量在每次被线程访问时，都强迫从主内存中读该变量的 值，而当该变量发生变化时，又会强迫将最新的值刷新到主内存，任何时刻，不同的 线程总是能够看到该变量的最新值。 4. 线程启动规则 线程的start()方法先于它的每一个动作，即如果线程A在执行线程B 的start方法之前修改了共享变量的值，那么当线程B执行start方法时，线程A对共享 变量的修改对线程B可见 
+5. 传递性 A先于B ，B先于C 那么A必然先于C 
+6. 线程终止规则 线程的所有操作先于线程的终结，Thread.join()方法的作用是等待 当前执行的线程终止。假设在线程B终止之前，修改了共享变量，线程A从线程B的 join方法成功返回后，线程B对共享变量的修改将对线程A可见。 
+7. 线程中断规则 对线程 interrupt()方法的调用先行发生于被中断线程的代码检测到 中断事件的发生，可以通过Thread.interrupted()方法检测线程是否中断。 
+8. 对象终结规则对象的构造函数执行，结束先于finalize()方法
+
+### 指令重排
+&nbsp;&nbsp;&nbsp;&nbsp;java语言规范规定jvm线程内部维持顺序化语义。即只要程序的最终结果与它顺序的结果相等，那么指令的执行顺序可以与代码顺序不一致，此过程叫指令的重排序。指令重排的意义在哪？jvm能够根据处理器的特性（CPU多级缓存、多核处理器等）适当对机器指令进行重排序，是机器指令能更符合CPU的执行特性，最大限度发挥机器性能。
+
+![指令优化](/images/pasted-36.png)
 
 
-## 有序性
+### as-if-serial语义
+不管怎么重排序（编译器和处理器为了提高并行度），（单线程下）程序的执行结果不能被改变。编译器，runtime 和处理器都必须遵守as-if-serial语义。
+
+## volatile语义
