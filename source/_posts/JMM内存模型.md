@@ -308,3 +308,137 @@ private static Integer x, y = 0;
 不管怎么重排序（编译器和处理器为了提高并行度），（单线程下）程序的执行结果不能被改变。编译器，runtime 和处理器都必须遵守as-if-serial语义。
 
 ## volatile语义
+&nbsp;&nbsp;&nbsp;&nbsp;volatile是java虚拟机提供的轻量级的同步机制。有两个作用：
+1. 可见性，一个被volatile变量修改会被其他线程感知到
+2. 有序性，通过内存屏障，禁止指令重排
+3. 无法保证原子性，参照下面的代码，并发情况下，执行incr方法会线程安全问题，可以通过`synchronized`解决。其中`synchronized`本身也具有可见性，故不用`volatile`修饰
+
+```
+private static volatile Interger counter = 0
+
+public static void incr(){
+	counter++; // 不会发生指令重排，但是不是原子性
+}
+```
+
+> 这里引申下，dcl（双重检测锁）在并发情况下，会有线程问题，细节不过多展示，那这里需要加入`volatile`，这里`volatile`和`synchronized`都必须在，因为不加`volatile`,这里`instance = new Instance()`会发生指令重排，会出现线程问题
+
+```
+private static Instance instance;
+
+public static Instance getInstance(){
+	if(instance == null){
+    	synchronized(Instance.class){
+        	if(instance == null){
+            	instance = new Instance();
+            }
+        }
+    }
+}
+```
+
+### volatile禁止重排优化
+&nbsp;&nbsp;&nbsp;&nbsp;要说明`volatile`禁止重排，这里就的引入一个名词<b><font color='red'>内存屏障（memory barrier）</font></b>。
+#### 内存屏障
+是一个cpu指令。jvm有四个内存屏障指令。
+
+|屏蔽类型| 指令实例 | 说明 |
+| :-----| :---- | :---- |
+| LoadLoad | Load1;LoadLoad;Load2 | 保证Load1的读取操作在Load2之前 |
+| StoreStore | Store1;StoreStore;Store2 | 在Store2及其后的写操作执行前，保证Store1的写操作已刷新到主内存 |
+| LoadStore | Load1;LoadStore;Store2; | 在Store2及其后的写操作执行前，保证Load1的读操作是正确数据 |
+| StoreLoad | Store1;StoreLoad;Load2 | 保证Store1的写操作已刷新内存，Load2读取数据是正确数据 |
+
+##### 编译器屏障（Compiler Barrior）
+阻止编译器重排，保证编译程序时在优化屏障之前的指令不会在优化屏障之后执行。
+
+```
+/* The "volatile" is due to gcc bugs */
+#define barrier() __asm__ __volatile__("": : :"memory") 
+
+```
+
+##### CPU屏障（Cpu Barrior）
+1. 作用：
+	1. 防止指令重排序
+	2. 保证数据可见性
+2. 分类：
+	1. lfence，是一种Load Barrior 读屏障，会将invalidate queue失效，强制读取L1 Cache中，而且lfence之后的读操作不会被调度到之前，即lfence的读操作一定在lfence完成（并未规定全局可见性）；
+	2. sfence，是一种save Barrior 写屏障，会将store buffer中缓存的修改刷入L1 Cache中，使得其他cpu核可以观察到这些变化，而且之后的写操作不会被调度到之前，即sfence之前的写操作一定在sfence完成且全局可见
+	3. mfence，是一种全能型屏障，具备lfence和sfence的能力，同时刷新store buffer和invalidate queue，保证了mfence前后的读写操作的顺序，同时要求mfence之后写操作结果全局可见之前，mfence之前写操作全局可见
+    
+> cpu屏障也包含指令<b>lock前缀</b>，lock不是一种内存屏障，但是它能完成类似内存屏障的功能。lock会对cpu总线和高速缓存加锁，可以理解为cpu指令级的一种锁。会让指令操作原子化，而且自带mfence效果。
+
+&nbsp;&nbsp;&nbsp;&nbsp;<b>X86-64一般情况根本不会需要使用lfence与sfence这两个指令，除非操作Write-Through内存或使用 non-temporal 指令（NT指令，属于SSE指令集），比如movntdq, movnti, maskmovq，这些指令也使用Write-Through内存策略，通常使用在图形学或视频处理，Linux编程里就需要使用GNC提供的专门的函数，下面是GNU中的三种内存屏障定义方法，下面是结合编译器屏障和CPU指令屏障。
+```
+#define lfence() __asm__ __volatile__("lfence": : :"memory") 
+#define sfence() __asm__ __volatile__("sfence": : :"memory") 
+#define mfence() __asm__ __volatile__("mfence": : :"memory") 
+```
+&nbsp;&nbsp;&nbsp;&nbsp;代码中仍然使用lfence()与sfence()这两个内存屏障应该也是一种长远的考虑。按照Interface写代码是最保险的，万一Intel以后出一个采用弱一致模型的CPU，遗留代码出问题就不好了。目前在X86下面视为编译器屏障即可。</b>
+
+```java
+# java通过魔术类来加内存屏障
+private static final Unsafe unsafe = Unsafe.getUnsafe();
+unsafe.loadFence();
+unsafe.storeFence();
+unsafe.fullFence();
+```
+
+> 下面这里有一个典型的使用内存屏障的例子（DCL）
+```
+private static A a= null;
+
+    public static A getInstance(){
+        if(a == null){
+            synchronized (双重检查锁.class){
+                a = new A(); // 多线程可能会出现问题的地方
+            }
+        }
+        return a;
+    }
+
+```
+> 为什么在多线程的场景下a = new A();会出现问题？
+其实这里不是原子操作，有分为下面三步；
+> 1. 分配对象内存空间 memory = allocate();
+> 2. 初始化对象	 instance(memory);
+> 3. 设置instance的对象指向刚分配的内存空间instance = memory;
+
+> <font color='red'><b>由于第二步和第三步没有依赖关系，是可以重排的。重排后再单线程结果是没有改变的，所有这种重排是可以允许的。指令重排只会保证串行语义的执行的一致性(单线程)，但并不会关心多线程间的语义一致性。所以当一个线程访问instance对象不为null时，虽然是不为空的，但是执行方法时就会报错，对象没有实例化完成。解决重排通过加上`volatile`就可以解决。</b></font>
+
+#### volatile内存语义的实现
+
+编译器制定的volatile重排序规则表
+
+|  | 第二个操作：普通读写 | 第二个操作：volatile读 | <font color='red'>第二个操作：volatile写</font> |
+| :-----:| :----: | :----: | :----: |
+| 第一个操作：普通读写 | 可以 | 可以 | 不可以 |
+| <font color='red'><b>第一个操作：volatile读</b></font> | 不可以 | 不可以 | 不可以 |
+| 第一个操作：volatile写 | 可以 | 不可以 | 不可以 |
+* 其中第一个操作：volatile读，都不可以重排
+* 其中第二个操作：volatile写，都不可以重排
+* 其中第一个操作：volatile写，第二个操作：volatile读，都不可以重排
+
+&nbsp;&nbsp;&nbsp;&nbsp;为了实现volatile的内存语义，编译器在生成字节码时，会在指令序列中插入内存屏障来禁止特定类型的处理器重排序。对于编译器来说，发现一个最优布置来最小化插入屏障的总数几乎不可能。为此，JMM采取保守策略。下面是基于保守策略的JMM内存屏障插入策 略。
+* 在每个volatile写操作的前面插入一个StoreStore屏障。
+* 在每个volatile写操作的后面插入一个StoreLoad屏障。 
+* 在每个volatile读操作的后面插入一个LoadLoad屏障
+* 在每个volatile读操作的后面插入一个LoadStore屏障
+
+这里举一个来说明
+```
+ int a;
+    volatile int v1 = 1;
+    volatile int v2 = 2;
+
+    void readAndWrite(){
+        int i = v1; // 第一个volatile读
+        int j = v2; // 第二个volatile读
+        a = i+j;    // 普通写
+        v1 = i + 1; // 第一个volatile写
+        v2 = j * 2; // 第二个volatile写
+    }
+```
+针对readAndWrite方法，编译器在字节码会做如下的优化，见下面的解释就可以会很清楚了。
+![内存屏障优化](/images/pasted-38.png)
