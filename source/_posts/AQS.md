@@ -103,6 +103,17 @@ reentrantLock.unlock(); //解锁
 ```
 那经过自己的思考和结论，AQS就是这样实现的。
 
+### 结构图
+
+![AQS结构图](/images/pasted-49.png)
+
+### 队列
+#### CLH同步等待队列
+
+![CLH](/images/pasted-50.png)
+#### Condition条件等待队列
+![condition](/images/pasted-51.png)
+
 
 ### 介绍
 `ReentrantLock`代码，这里采用公平锁来介绍
@@ -123,7 +134,11 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         /**
          * Performs non-fair tryLock.  tryAcquire is implemented in
          * subclasses, but both need nonfair try for trylock method.
-         */
+         *
+         *
+         * 1. 非公平获取锁，只要判断资源状态state=0，如果这个时候有线程可以直接获取锁，这里就是非公平的概念（刚进来的线程和head后的第一个线程来争抢）
+         * 2. 其他和公平是一样的
+         */
         final boolean nonfairTryAcquire(int acquires) {
             final Thread current = Thread.currentThread();
             int c = getState();
@@ -143,6 +158,10 @@ public class ReentrantLock implements Lock, java.io.Serializable {
             return false;
         }
 
+		/**
+        *
+        * 释放锁
+        **/
         protected final boolean tryRelease(int releases) {
             int c = getState() - releases;
             if (Thread.currentThread() != getExclusiveOwnerThread())
@@ -226,7 +245,9 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         /**
          * Fair version of tryAcquire.  Don't grant access unless
          * recursive call or no waiters or is first.
-         */
+         *
+         * 1. 尝试获取锁，判断有没有state资源可以用，如果有的话，还要判断队列里面有没有节点，如果有就去获取锁
+         */
         protected final boolean tryAcquire(int acquires) {
             final Thread current = Thread.currentThread();
             int c = getState();
@@ -642,7 +663,7 @@ public abstract class AbstractQueuedSynchronizer
      * 这是阻塞队列中唤醒操作，这里操作分为两个步骤
      * 1. 默认进来就是-1，这里可以看下获取锁阶段没拿到锁的时候会将state设置成-1
      * 2. 进来的时候会将当前节点head状态设置成0，可以是尝试去拿锁
-     * 3. 然后取当前节点后的第一个节点的线程唤醒，当前节点是head节点
+     * 3. 然后取当前节点后的第一个节点的线程唤醒，node是head节点
      */
     private void unparkSuccessor(Node node) {
         /*
@@ -811,7 +832,7 @@ public abstract class AbstractQueuedSynchronizer
      * 2. 然后前置节点状态设置成-1
      * 3. 这里很奇怪，刚才我们看unlock 时调用unparkSuccessor又把状态设置成0
      * 4. 这里解释下，为什么状态从0->-1->0，这里为什么要这么设计？因为在公平锁的时候，这个时候一定会是head后的第一个获取到锁，这是没有问题的，
- 但是如果是非公平锁的时候，head后的第一个节点线程是有可能获取不到锁的，还需要阻塞，这个时候进来的状态还是0，就还是会变成0->-1->0
+ 但是如果是非公平锁的时候，head后的第一个节点线程是有可能获取不到锁的，还需要阻塞，这个时候进来的状态还是0，就还是会变成0->-1->0，循环就能持续下去
      *
      */
     private static boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
@@ -1105,7 +1126,7 @@ public abstract class AbstractQueuedSynchronizer
      *         correctly.
      * @throws UnsupportedOperationException if exclusive mode is not supported
      *
-     * AQS实现独占模式获取锁
+     * AQS实现独占模式获取锁，子类需要实现
      */
     protected boolean tryAcquire(int arg) {
         throw new UnsupportedOperationException();
@@ -1133,7 +1154,7 @@ public abstract class AbstractQueuedSynchronizer
      *         correctly.
      * @throws UnsupportedOperationException if exclusive mode is not supported
      *
-     * AQS独占模式下释放锁
+     * AQS独占模式下释放锁，子类需要实现
      */
     protected boolean tryRelease(int arg) {
         throw new UnsupportedOperationException();
@@ -1171,7 +1192,7 @@ public abstract class AbstractQueuedSynchronizer
      *         correctly.
      * @throws UnsupportedOperationException if shared mode is not supported
      *
-     * 共享模式下获取锁
+     * 共享模式下获取锁，子类需要实现
      */
     protected int tryAcquireShared(int arg) {
         throw new UnsupportedOperationException();
@@ -1198,7 +1219,7 @@ public abstract class AbstractQueuedSynchronizer
      *         correctly.
      * @throws UnsupportedOperationException if shared mode is not supported
      *
-     * 共享模式下释放锁
+     * 共享模式下释放锁，子类需要实现
      */
     protected boolean tryReleaseShared(int arg) {
         throw new UnsupportedOperationException();
@@ -1560,7 +1581,9 @@ public abstract class AbstractQueuedSynchronizer
      *         current thread, and {@code false} if the current thread
      *         is at the head of the queue or the queue is empty
      * @since 1.7
-     */
+     *
+     * 在尝试获取锁时调用，判断是否有不包含当前线程中队列的前置节点，有就可以去尝试获取锁
+     */
     public final boolean hasQueuedPredecessors() {
         // The correctness of this depends on head being initialized
         // before tail and on head.next being accurate if the current
@@ -2308,6 +2331,9 @@ public abstract class AbstractQueuedSynchronizer
      * natively implement using hotspot intrinsics API. And while we
      * are at it, we do the same for other CASable fields (which could
      * otherwise be done with atomic field updaters).
+     *
+     * 这里是使用unsafe来操作，cas操作，原子操作
+     *
      */
     private static final Unsafe unsafe = Unsafe.getUnsafe();
     private static final long stateOffset;
@@ -2367,12 +2393,3 @@ public abstract class AbstractQueuedSynchronizer
 }
 
 ```
-
-
-### Lock
-```java
-
-
-```
-
-### unlock
