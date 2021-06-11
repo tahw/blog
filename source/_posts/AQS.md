@@ -108,10 +108,13 @@ reentrantLock.unlock(); //解锁
 ![AQS结构图](/images/pasted-49.png)
 
 ### 队列
+
 #### CLH同步等待队列
+&nbsp;&nbsp;&nbsp;&nbsp;AQS当中的同步队列也称CLH队列，CLH是Craig、Landin、Hagersten三人发明的基于双向链表数据结构的队列，是FIFO先进先出的等待队列，Java中的CLH队列是原CLH队列的一个变种，线程由原自旋机制改成阻塞机制
 
 ![CLH](/images/pasted-50.png)
 #### Condition条件等待队列
+&nbsp;&nbsp;&nbsp;&nbsp;Condition是一个多线程间协调通信的工具类，使得某个或者某些线程一起等待某个条件，只有该条件具备时，这些等待的线程才被唤醒，从而重新争夺锁
 ![condition](/images/pasted-51.png)
 
 
@@ -2393,3 +2396,10 @@ public abstract class AbstractQueuedSynchronizer
 }
 
 ```
+
+公平锁
+![公平锁竞争流程](/images/pasted-52.png)
+
+
+非公平锁
+![非公平锁竞争流程](/images/pasted-53.png)
