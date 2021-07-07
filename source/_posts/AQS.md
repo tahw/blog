@@ -2404,3 +2404,94 @@ public abstract class AbstractQueuedSynchronizer
 
 非公平锁
 ![非公平锁竞争流程](/images/pasted-53.png)
+
+# 释放锁
+1. release 
+    * 正常修改状态
+2. 中断
+    * 这里的中断是会影响LockSupport
+
+## 中断
+
+这里通过<font color='red'><b>unpark唤醒，但是只会被唤醒一次，第二次循环的话还是会阻塞</b></font>
+```java
+Thread thread = new Thread(() -> {
+    for (int i = 0; i < 5; i++) {
+        System.out.println("park before : " + i);
+        LockSupport.park();
+        System.out.println("park after : " + i);
+    }
+});
+thread.start();
+try {
+    Thread.sleep(100);
+} catch (InterruptedException e) {
+    e.printStackTrace();
+}
+LockSupport.unpark(thread);
+```
+
+这里通过<font color='red'><b>interrupt中断信号来唤醒，这里是LockSupport.park()无参的方法，再也不会阻塞的</b></font>
+```java
+Thread thread = new Thread(() -> {
+    for (int i = 0; i < 5; i++) {
+        System.out.println("park before : " + i);
+        LockSupport.park();
+        System.out.println("park after : " + i);
+    }
+});
+thread.start();
+try {
+    Thread.sleep(100);
+} catch (InterruptedException e) {
+    e.printStackTrace();
+}
+thread.interrupt(); // 中断
+```
+
+这里通过<font color='red'><b>interrupt中断信号来唤醒，这里是LockSupport.park(this)方法，只能被唤醒一次，第二次循环是不能被唤醒的</b></font>
+```java
+# 有序的排队，但是第三个线程首先被唤醒，循环第二次还是阻塞了
+Thread[] threads = new Thread[5];
+ReentrantLock reentrantLock = new ReentrantLock(true);
+for (int i = 0; i < 5; i++) {
+    Thread thread = new Thread(()->{
+        reentrantLock.lock();
+        System.out.println(Thread.currentThread().getName());
+        if (Thread.interrupted()) {
+            System.out.println(Thread.currentThread().getName()+"interrupt");
+        }
+        reentrantLock.unlock();
+    });
+    threads[i] = thread;
+    thread.start();
+}
+threads[3].interrupt();
+```
+![当前线程](/images/pasted-54.jpg)
+
+![AQS中断信号](/images/pasted-55.jpg)
+
+## API
+
+* Thread.interrupted()
+    * 判断当前状态是否被中断，然后清除自己中断的标记
+* Thread.isInterrupted()
+    * 判断是否中断，不会清楚自己中断的标记
+
+## 中断的意义
+
+Thread中stop方法，这个方法是强制停止线程的活动，直接杀死，不会等线程结束。这样重要的方法还没执行完就终止了，这是有问题的，现在这个方法已经被废弃掉了，现在取而代之的是interrupt方法，这个方法是中断，但是可以优雅的退出，用户可以根据这个是否中断做业务操作
+
+```java
+if (!tryAcquire(arg) &&
+acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+selfInterrupt();
+
+private final boolean parkAndCheckInterrupt() {
+    LockSupport.park(this);
+    return Thread.interrupted();
+}
+```
+这里的`selfInterrupt();`就是线程中断后，`Thread.interrupted();`这里返回true，但是会清除中断标记，返回true后，走到`selfInterrupt();`还是会给自己打上一个中断信号的。
+![中断信号标识](/images/pasted-56.jpg)
