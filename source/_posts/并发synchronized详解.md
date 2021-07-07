@@ -38,6 +38,8 @@ private static int total = 0;
 ```
 这样的方式先采用`countDownLatch.await()`，然后再执行`countDownLatch.countDown()`，可以最大限度实现并发，这里的`CountDownLatch`为1，结果肯定是小于10000，解决方式可以采用`synchronized`和`lock`
 
+<!-- more -->
+
 # 锁发展历史
 1. `jdk<1.6`是jdk自带的，这是第一代加锁方式，但是这种锁非常的重，一旦加锁，都是采用os实现的加锁方式，这里就会发生上下文切换，空间切换，非常缓慢。
 2. doug li看`synchronized`太慢了，自己开发了一个并发包，juc，性能非常好，纯java写的，里面还实现了jdk没有的特性，虽然底层还是调用了一个java内置的函数。

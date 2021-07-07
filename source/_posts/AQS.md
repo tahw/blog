@@ -21,6 +21,7 @@ that rely on <b><font color='red'>a single atomic int value to represent state.<
 
 ![AQS依赖图](/images/pasted-48.png)
 
+<!-- more -->
 
 &nbsp;&nbsp;&nbsp;&nbsp;根据上面类图，我们可以看见`ReentrantLock`、`Semaphore`、`ReentrantReadWriteLock`都是使用的AQS
 
