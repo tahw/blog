@@ -9,6 +9,8 @@ date: 2021-05-15 20:17:00
 # jvm整个执行过程
 ![jvm->cpu执行过程](/images/pasted-39.png)
 
+<!-- more -->
+
 # volatile可见性
 ```java
 /**
