@@ -294,7 +294,10 @@ final boolean transferForSignal(Node node) {
 ```
 ![AQS唤醒](/images/pasted-59.png)
 
-## 流程图
+## 状态扭转图
+![queue状态扭转图](/images/pasted-63.png)
+
+## 整体流程图
 ![queue整体流程图](/images/pasted-62.png)
 
 
