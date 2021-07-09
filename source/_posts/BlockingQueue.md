@@ -228,7 +228,7 @@ private E dequeue() {
 等待（AbstractQueuedSynchronizer）
 ```java
 public final void await() throws InterruptedException {
-    # 如果当前线程被中断，然后会抛出到用户方法内，被捕获可以去做线程中断的业务
+    // 如果当前线程被中断，然后会抛出到用户方法内，被捕获可以去做线程中断的业务
     if (Thread.interrupted())
         throw new InterruptedException();
     Node node = addConditionWaiter();
