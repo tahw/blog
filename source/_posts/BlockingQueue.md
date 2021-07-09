@@ -122,20 +122,34 @@ private static void consumer() throws InterruptedException {
 
 
 # 源码解析
-这里通过`ArrayBlockingQueue`来介绍队列的源码
+这里通过`ArrayBlockingQueue`来介绍队列的源码，这里还有一点要补充下，这里采用的是AQS的另外一个特性来实现的-条件等待队列
 
 ## 初始化
-初始化ArrayBlockingQueue，构建三个元素ReentrantLock、notEmpty Condition、notFull Condition，items这个是存放数组的元素
-> 这里借助ReentrantLock来实现的
 ```java
+/**
+ * 初始化构造函数，会构造4个内容
+ * 1. 数组-存放元素
+ * 2. reentrantLock-锁
+ * 3. notEmpty Condition-非空的条件等待对象
+ * 4. notFull Condition-非满的条件等待对象
+ */
 public ArrayBlockingQueue(int capacity, boolean fair) {
     if (capacity <= 0)
         throw new IllegalArgumentException();
-    # 数组长度
     this.items = new Object[capacity];
     lock = new ReentrantLock(fair);
     notEmpty = lock.newCondition();
     notFull =  lock.newCondition();
+}
+```
+ReentrantLock我们已经很熟悉了，那这里看下Condition结构，这个也是AbstractQueuedSynchronizer的内部类，<font color='red'><b>其实这个比较重要的是firstWaiter、lastWaiter属性，注意这里还是使用的是Node，但是这里条件等待队列里面是采用Node的nextWaiter来连接条件等待队列</b></font>
+```java
+public class ConditionObject implements Condition, java.io.Serializable {
+   private static final long serialVersionUID = 1173984872572414699L;
+   /** First node of condition queue. */
+   private transient Node firstWaiter;
+   /** Last node of condition queue. */
+   private transient Node lastWaiter;
 }
 ```
 
@@ -214,23 +228,71 @@ private E dequeue() {
 等待（AbstractQueuedSynchronizer）
 ```java
 public final void await() throws InterruptedException {
+    # 如果当前线程被中断，然后会抛出到用户方法内，被捕获可以去做线程中断的业务
     if (Thread.interrupted())
         throw new InterruptedException();
-    # 元素队列已经满了
     Node node = addConditionWaiter();
     int savedState = fullyRelease(node);
     int interruptMode = 0;
+    // 判断是否在CLH队列里，如果是的话，就不会走到while里面，如果不是的话，那就是在Condition队列里面，就走到while里面，就park住了，（这里是不是有疑问，什么时候加在CLH队列，什么时候唤醒，接下来看看）
     while (!isOnSyncQueue(node)) {
         LockSupport.park(this);
         if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
             break;
     }
+    // 这块是不是很熟悉，判断当前线程是不是head后的第一个线程，如果是，尝试获取锁，获取不到锁那就park住，这里要park住两次
     if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
         interruptMode = REINTERRUPT;
     if (node.nextWaiter != null) // clean up if cancelled
         unlinkCancelledWaiters();
     if (interruptMode != 0)
         reportInterruptAfterWait(interruptMode);
+}
+```
+加入到条件队列里面，注意节点的状态是Node.CONDITION
+```java
+/**
+* Adds a new waiter to wait queue.
+* @return its new wait node
+*/
+private Node addConditionWaiter() {
+   Node t = lastWaiter;
+   // If lastWaiter is cancelled, clean out.
+   if (t != null && t.waitStatus != Node.CONDITION) {
+       unlinkCancelledWaiters();
+       t = lastWaiter;
+   }
+   Node node = new Node(Thread.currentThread(), Node.CONDITION);
+   if (t == null)
+       firstWaiter = node;
+   else
+       t.nextWaiter = node;
+   lastWaiter = node;
+   return node;
+}
+```
+进入到这里就是等待，进入到条件等待队列里面，然后释放锁，这里的释放锁就是把state设置成0，然后唤醒CLH队列里的第一个节点
+```java
+/**
+ * Invokes release with current state value; returns saved state.
+ * Cancels node and throws exception on failure.
+ * @param node the condition node for this wait
+ * @return previous sync state
+ */
+final int fullyRelease(Node node) {
+  boolean failed = true;
+  try {
+      int savedState = getState();
+      if (release(savedState)) {
+          failed = false;
+          return savedState;
+      } else {
+          throw new IllegalMonitorStateException();
+      }
+  } finally {
+      if (failed)
+          node.waitStatus = Node.CANCELLED;
+  }
 }
 ```
 ![AQS等待](/images/pasted-58.png)
@@ -262,6 +324,8 @@ private void doSignal(Node first) {
                 (first = firstWaiter) != null);
 }
 ```
+
+修改节点状态从Node.CONDITION为0，这个时候就可以准备入CLH队列了，然后把当前节点所在的CLH队列前置节点设置成-1
 ```java
 /**
  * Transfers a node from a condition queue onto sync queue.
@@ -273,7 +337,6 @@ private void doSignal(Node first) {
 final boolean transferForSignal(Node node) {
     /*
      * If cannot change waitStatus, the node has been cancelled.
-     * 将节点状态-2修改为0
      */
     if (!compareAndSetWaitStatus(node, Node.CONDITION, 0))
         return false;
