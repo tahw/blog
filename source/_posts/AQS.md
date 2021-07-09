@@ -2431,7 +2431,7 @@ try {
 LockSupport.unpark(thread);
 ```
 
-这里通过<font color='red'><b>interrupt中断信号来唤醒，这里是LockSupport.park()无参的方法，再也不会阻塞的</b></font>
+这里通过<font color='red'><b>interrupt中断信号来唤醒，这里是LockSupport.park()无参的方法，再也不会阻塞的，其实这里是监视是不是有中断信号</b></font>
 ```java
 Thread thread = new Thread(() -> {
     for (int i = 0; i < 5; i++) {
@@ -2445,6 +2445,25 @@ try {
     Thread.sleep(100);
 } catch (InterruptedException e) {
     e.printStackTrace();
+}
+thread.interrupt(); // 中断
+```
+
+这里通过<font color='red'><b>interrupt中断信号来唤醒，这里是LockSupport.park()无参的方法，再也不会阻塞的，其实这里还有一个方法Thread.interrupted();这是会清除线程中断信号，那循环执行LockSupport.park()还是会阻塞的</b></font>
+```java
+Thread thread = new Thread(() -> {
+	for (int i = 0; i < 5; i++) {
+		System.out.println("park before : " + i);
+		LockSupport.park();
+		Thread.interrupted();
+		System.out.println("park after : " + i);
+	}
+});
+thread.start();
+try {
+	Thread.sleep(100);
+} catch (InterruptedException e) {
+	e.printStackTrace();
 }
 thread.interrupt(); // 中断
 ```
