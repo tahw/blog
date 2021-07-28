@@ -236,7 +236,7 @@ true
 3. 内存屏障
 4. 获取释放锁
 5. 线程阻塞
-![Unsafe](/images/pasted-70.jpg)
+![Unsafe](/images/pasted-70.png)
 
 ### Unsafe-内存管理
 Unsafe操作的native方法，是<font color='red'><b>堆外内存</b></font>的分配、扩展、拷贝、释放、设置特定值
