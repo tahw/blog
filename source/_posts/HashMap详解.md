@@ -649,14 +649,15 @@ final Node<K,V> untreeify(HashMap<K,V> map) {
 ![场景](/images/pasted-78.png)
 ![场景续](/images/pasted-79.png)
 根据上面的演化，我们可以得到下面的规则
-1. 如果插入的父节点是黑色，可以不用动
-2. 如果插入的父节点是红色，叔叔节点是空的，左旋+变色
-3. 如果插入的父节点是红色，叔叔节点是红色，父节点和叔叔节点都变色
-4. 如果插入的父节点是红色，叔叔节点是黑的，变色+左旋+变色
+1. <font color='red'><b>如果插入的父节点是黑色，可以不用动</b></font>
+2. <font color='red'><b>如果插入的父节点是红色，叔叔节点是空的，左旋+变色</b></font>
+3. <font color='red'><b>如果插入的父节点是红色，叔叔节点是红色，父节点和叔叔节点都变色</b></font>
+4. <font color='red'><b>如果插入的父节点是红色，叔叔节点是黑的，变色+左旋+变色</b></font>
 
-> 当然上面的场景还是没有覆盖到全部，可以得到一部分的逻辑，然后跟着代码走一走
+> 上面的场景已经覆盖到全部，然后跟着代码走一走
 
 ###### 源码介绍
+这是树化的入口
 ```java
 /**
     * Replaces all linked nodes in bin at index for given hash unless
@@ -886,6 +887,25 @@ static <K,V> void moveRootToFront(Node<K,V>[] tab, TreeNode<K,V> root) {
 }
 ```
 ![移动root置前](/images/pasted-87.png)
+
+<p>
+```java
+/**
+ * 还是可以输出，只要不启用断言
+ * hashmap assert 断言
+ * -ea 启用断言
+ * -da 关闭断言
+ * 默认是不启用的
+ */
+public class HashMapAssertTest {
+
+    public static void main(String[] args) {
+        assert 1==2;
+        System.out.println(1);
+    }
+}
+```
+</p>
 
 #### get操作
 获取操作，就是遍历链表或者红黑树，就不仔细讲了
