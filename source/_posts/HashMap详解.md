@@ -14,13 +14,13 @@ categories:
 |1.7|数组+链表|
 |1.8+|数组+链表+红黑树|
 
-### HashMap jdk1.7解析
+## HashMap jdk1.7解析
 这里通过下面的例子，来介绍HashMap1.7源码
 ```java
 HashMap<String,String> map = new HashMap(11);
 map.put("1","1");
 ```
-#### 构造函数
+### 构造函数
 我们看下初始化做了什么事情？见下面代码。初始化容量、加载因子，那这里有个疑问？传进来的初始化容量是11，那数组的容量就是11？这里回答下，数组的长度不是11，那是多少呢？我们接下来看
 ```java
 /** 
@@ -82,7 +82,7 @@ int threshold; // 阈值，capacity * load factor
 final float loadFactor;
 ```
 
-#### put操作
+### put操作
 ```java
 /**
 * put操作
@@ -238,17 +238,17 @@ void createEntry(int hash, K key, V value, int bucketIndex) {
 }
 ```
 
-#### 引申：1.7HashMap为什么会在put的时候存在并发安全问题？
+### 引申：1.7HashMap为什么会在put的时候存在并发安全问题？
 ![hashmap链表环](/images/pasted-72.png)
 
 
-### HashMap jdk1.8解析
-由于HashMap1.8修改了迁移的算法和结构，并发情况下，没有线程安全问题
+## HashMap jdk1.8解析
+由于HashMap1.8修改了迁移的算法和结构，并发情况下，并没有出现链表环
 ```java
 HashMap<String,String> map = new HashMap(11);
 map.put("1","1");
 ```
-#### 构造函数
+### 构造函数
 构造函数其他都一样，多了一个`tableSizeFor`
 ```java
 public HashMap(int initialCapacity, float loadFactor) {
@@ -264,7 +264,7 @@ public HashMap(int initialCapacity, float loadFactor) {
     this.threshold = tableSizeFor(initialCapacity);
 }
 ```
-tableSizeFor方法，其实看一下停复杂的，但是根据注释，还是得到大于size的最小2的n次幂，只是调整了下算法
+tableSizeFor方法，其实突然看一下挺复杂的，但是根据注释，还是得到大于size的最小2的n次幂，只是调整了下算法
 ```java
 /**
     * Returns a power of two size for the given target capacity.
@@ -307,11 +307,10 @@ static final int MIN_TREEIFY_CAPACITY = 64; // 链表转红黑树，数组长度
 
 
 /**
-* 节点结构也是调整了，现在是采用Node节点
 * Basic hash bin node, used for most entries.  (See below for
 * TreeNode subclass, and in LinkedHashMap for its Entry subclass.)
 */
-static class Node<K,V> implements Map.Entry<K,V> {
+static class Node<K,V> implements Map.Entry<K,V> { // 节点结构也是调整了，现在是采用Node节点
     final int hash;
     final K key;
     V value;
@@ -351,12 +350,11 @@ static class Node<K,V> implements Map.Entry<K,V> {
     }
 }
 /**
-    * 红黑树节点类型，其间接继承Node
     * Entry for Tree bins. Extends LinkedHashMap.Entry (which in turn
     * extends Node) so can be used as extension of either regular or
     * linked node.
     */
-static final class TreeNode<K,V> extends LinkedHashMap.Entry<K,V> {
+static final class TreeNode<K,V> extends LinkedHashMap.Entry<K,V> { // 红黑树节点类型，其间接继承Node
     TreeNode<K,V> parent;  // red-black tree links
     TreeNode<K,V> left;
     TreeNode<K,V> right;
@@ -367,14 +365,14 @@ static final class TreeNode<K,V> extends LinkedHashMap.Entry<K,V> {
     }
 }
 ```
-#### put操作
+### put操作
 ```java
 public V put(K key, V value) {
     return putVal(hash(key), key, value, false, true);
 }
 ```
 
-##### hash方法
+#### hash方法
 这里的hash方法就不太一样了，这里有一定的规则，如果key是空的，就返回0，否则就是key的hashCode值，高16位和低16位异或。
 ```java
 /**
@@ -406,7 +404,7 @@ static final int hash(Object key) {
 > Hash：0000 0010 1100 1111
 > index：0000 0000 0000 1111
 
-##### putVal方法
+#### putVal方法
 这里最核心put的方法，这个方法涉及链表、红黑树
 1. <font color='red'><b>index相同的节点hash是有可能是相同的</b></font>
 2. <font color='red'><b>两个节点相同条件是hash、key相同，就表示相同的节点</b></font>
@@ -466,7 +464,7 @@ final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
 ```
 由上面的方法可以发现，数组为空的时候调用了`resize()`，数组元素长度大于阈值就会调用`resize()`，这个方法看起来干了很多事情，接下来我们看一下`resize()`
 
-##### resize方法
+#### resize方法
 ```java
 /**
 * 初始化表格数组、扩容
@@ -634,9 +632,9 @@ final Node<K,V> untreeify(HashMap<K,V> map) {
     return hd;
 }
 ```
-##### treeifyBin树化
+#### treeifyBin树化
 
-###### 红黑树特性
+##### 红黑树特性
 &nbsp;&nbsp;&nbsp;&nbsp;红黑树是HashMap1.8引入的新的结构。红黑树是一种平衡二叉树。红黑树有以下特性
 1. 节点是红色或黑色
 2. 根节点是黑色
@@ -645,7 +643,7 @@ final Node<K,V> untreeify(HashMap<K,V> map) {
 5. 从任一节点到该节点的每个叶子节点的所有路径都包含相同数目的黑色节点
 > [红黑树：https://www.cs.usfca.edu/~galles/visualization/RedBlack.html](https://www.cs.usfca.edu/~galles/visualization/RedBlack.html)
 
-###### 红黑树演化
+##### 红黑树演化
 ![场景](/images/pasted-78.png)
 ![场景续](/images/pasted-79.png)
 根据上面的演化，我们可以得到下面的规则
@@ -656,7 +654,7 @@ final Node<K,V> untreeify(HashMap<K,V> map) {
 
 > 上面的场景已经覆盖到全部，然后跟着代码走一走
 
-###### 源码介绍
+##### 源码介绍
 这是树化的入口
 ```java
 /**
@@ -838,8 +836,11 @@ static <K,V> TreeNode<K,V> rotateRight(TreeNode<K,V> root,
     }
     return root;
 }
-
 ```
+> 左旋和右旋中大量使用了lr = p.left = l.right这种三元表达式，那这个表达式是表示什么呢？表示
+> lr = l.right
+> p.left = l.right
+
 1. xp = x.parent，根节点
 2. 父节点是黑色，xpp = xp.parent
 ![场景一](/images/pasted-80.png)
@@ -858,7 +859,7 @@ static <K,V> TreeNode<K,V> rotateRight(TreeNode<K,V> root,
 
 > 这里没有重点讲左旋、右旋，可以对着上面的场景，然后自己走一遍
 
-##### 移动root节点
+#### 移动root节点
 数组的第一个节点就是root节点
 ```java
 /**
@@ -888,6 +889,71 @@ static <K,V> void moveRootToFront(Node<K,V>[] tab, TreeNode<K,V> root) {
 ```
 ![移动root置前](/images/pasted-87.png)
 
+#### putTreeVal
+这个就是把节点放入到红黑树中，还是比较简单的
+```java
+/**
+    * Tree version of putVal.
+    */
+final TreeNode<K,V> putTreeVal(HashMap<K,V> map, Node<K,V>[] tab,
+                                int h, K k, V v) {
+    Class<?> kc = null;
+    boolean searched = false;
+    TreeNode<K,V> root = (parent != null) ? root() : this;  // 寻找root节点，this就是当前数组索引下标的TreeNode节点，这里有可能其他线程会修改root
+    for (TreeNode<K,V> p = root;;) {
+        int dir, ph; K pk;
+        if ((ph = p.hash) > h) // 判断当前节点放在红黑树哪一边
+            dir = -1;
+        else if (ph < h)
+            dir = 1;
+        else if ((pk = p.key) == k || (k != null && k.equals(pk)))
+            return p;
+        else if ((kc == null &&
+                    (kc = comparableClassFor(k)) == null) ||
+                    (dir = compareComparables(kc, k, pk)) == 0) {
+            if (!searched) {
+                TreeNode<K,V> q, ch;
+                searched = true;
+                if (((ch = p.left) != null &&
+                        (q = ch.find(h, k, kc)) != null) ||
+                    ((ch = p.right) != null &&
+                        (q = ch.find(h, k, kc)) != null))
+                    return q;
+            }
+            dir = tieBreakOrder(k, pk);
+        }
+
+        TreeNode<K,V> xp = p;
+        if ((p = (dir <= 0) ? p.left : p.right) == null) {
+            Node<K,V> xpn = xp.next;
+            TreeNode<K,V> x = map.newTreeNode(h, k, v, xpn);
+            if (dir <= 0)
+                xp.left = x;
+            else
+                xp.right = x;
+            xp.next = x;
+            x.parent = x.prev = xp;
+            if (xpn != null)
+                ((TreeNode<K,V>)xpn).prev = x;
+            moveRootToFront(tab, balanceInsertion(root, x)); // 将节点放进红黑树后平衡红黑树，然后将新的root移到最前
+            return null;
+        }
+    }
+}
+```
+```java
+/**
+    * Returns root of tree containing this node.
+    */
+final TreeNode<K,V> root() {
+    for (TreeNode<K,V> r = this, p;;) {
+        if ((p = r.parent) == null)
+            return r;
+        r = p;
+    }
+}
+```
+
 <p>
 ```java
 /**
@@ -907,13 +973,13 @@ public class HashMapAssertTest {
 ```
 </p>
 
-#### get操作
+### get操作
 获取操作，就是遍历链表或者红黑树，就不仔细讲了
 
-#### delete操作
+### delete操作
 这个也比较复杂，后续有时间可以补充上来
 
-#### 引申：链表转红黑树是条件是节点>=8？
+### 引申：链表转红黑树是条件是节点>=8？
 下面条件才会转红黑树
 1. <font color='red'><b>数组长度>=64</b></font>
 2. <font color='red'><b>链表元素为9个的时候</b></font>
