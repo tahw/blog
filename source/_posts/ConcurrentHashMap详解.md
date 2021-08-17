@@ -949,7 +949,7 @@ static final <K,V> void setTabAt(Node<K,V>[] tab, int i, Node<K,V> v) { // cas�
 }
 ```
 ##### tryPresize
-扩容，随便者迁移数据
+扩容，迁移数据
 ```java
 /**
     * Tries to presize table to accommodate the given number of elements.
@@ -1010,6 +1010,9 @@ private final void tryPresize(int size) { // size是 2* n，默认的话size就�
     }
 }
 ```
+//TODO 这里什么时候的sc < 0?，第一次看，就会有疑问，这是什么时候执行到，外面while条件限制，感觉永远不会走到这里，是不是有问题？
+仔细看两三遍，猜想如果是并发的情况下就有可能，两个线程A和B同时进来while里，此时的sizeCtl是阈值，A设置sizeCtl为`(rs << RESIZE_STAMP_SHIFT) + 2` 这个一定是负数的，第二遍while循环`while((sc = sizeCtl) >= 0)`，虽然条件不满足，但是此时sc=sizeCtl，这个时候sc被修改成负数，此时的//TODO sc < 0 条件满足的。那`sc < 0`是做什么什么事情？其实很简单，正在迁移的数据的话就帮忙迁移，如果迁移完就退出，其中`(sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 || sc == rs + MAX_RESIZERS || (nt = nextTable) == null || transferIndex <= 0`，就表示迁移完了。<font color='red'><b>其中`sc == rs + 1 || sc == rs + MAX_RESIZERS`一定不会是true，官方已经纰漏，详细见：[probable bug in logic of ConcurrentHashMap.addCount()](https://bugs.java.com/bugdatabase/view_bug.do?bug_id=JDK-8214427)</b></font>
+
 ```java
 /**
     * Returns the stamp bits for resizing a table of size n.
@@ -1071,22 +1074,22 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) { // 转移
                 sizeCtl = (n << 1) - (n >>> 1);
                 return;
             }
-            if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
-                if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT)
+            if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) { // sc = sizeCtl，此时sizeCtl = sizeCtl - 1
+                if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT) // 这个逻辑表示sc != (resizeStamp(n) << RESIZE_STAMP_SHIFT) + 2，这个表示什么意思？其实在并发情况下表示还有线程在迁移数据，进入迁移的时候设置sizeCtl = (rs << RESIZE_STAMP_SHIFT) + 2，其中rs就是resizeStamp(n)。注意sizeCtl = sizeCtl - 1，已经改了
                     return;
                 finishing = advance = true;
                 i = n; // recheck before commit
             }
         }
-        else if ((f = tabAt(tab, i)) == null)
+        else if ((f = tabAt(tab, i)) == null) // 如果为null，设置老的tab节点设置为fwd
             advance = casTabAt(tab, i, null, fwd);
-        else if ((fh = f.hash) == MOVED)
+        else if ((fh = f.hash) == MOVED) // hash为MOVED，表示节点设置为fwd
             advance = true; // already processed
         else {
-            synchronized (f) { // 
-                if (tabAt(tab, i) == f) {
+            synchronized (f) { // 锁住数组索引节点
+                if (tabAt(tab, i) == f) { // 再次校验
                     Node<K,V> ln, hn;
-                    if (fh >= 0) {
+                    if (fh >= 0) { // 链表的迁移数据，1.8HashMap仔细介绍
                         int runBit = fh & n;
                         Node<K,V> lastRun = f;
                         for (Node<K,V> p = f.next; p != null; p = p.next) {
@@ -1113,10 +1116,10 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) { // 转移
                         }
                         setTabAt(nextTab, i, ln);
                         setTabAt(nextTab, i + n, hn);
-                        setTabAt(tab, i, fwd);
+                        setTabAt(tab, i, fwd); // 修改完设置节点为fwd
                         advance = true;
                     }
-                    else if (f instanceof TreeBin) {
+                    else if (f instanceof TreeBin) { // 树的迁移数据，1.8HashMap仔细介绍
                         TreeBin<K,V> t = (TreeBin<K,V>)f;
                         TreeNode<K,V> lo = null, loTail = null;
                         TreeNode<K,V> hi = null, hiTail = null;
@@ -1156,8 +1159,9 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) { // 转移
         }
     }
 }
-
 ```
+![迁移](/images/pasted-91.png)
+
 ##### TreeBin
 真正树化，下面的代码已经很熟悉了，1.8HashMap 已经深入介绍了，不多讲，这里着重说一下这里的hash值是TREEBIN，
 ```java
@@ -1206,5 +1210,261 @@ TreeBin(TreeNode<K,V> b) {
     }
     this.root = r;
     assert checkInvariants(root);
+}
+```
+
+#### helpTransfer方法
+```java
+/**
+    * Helps transfer if a resize is in progress.
+    */
+final Node<K,V>[] helpTransfer(Node<K,V>[] tab, Node<K,V> f) {
+    Node<K,V>[] nextTab; int sc;
+    if (tab != null && (f instanceof ForwardingNode) &&
+        (nextTab = ((ForwardingNode<K,V>)f).nextTable) != null) {
+        int rs = resizeStamp(tab.length);
+        while (nextTab == nextTable && table == tab &&
+                (sc = sizeCtl) < 0) {
+            if ((sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 ||
+                sc == rs + MAX_RESIZERS || transferIndex <= 0) // 这块的逻辑有问题的，上面已经介绍了
+                break;
+            if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1)) { // 帮助转移，只要有一个线程帮助转移，将sizeCtl加1
+                transfer(tab, nextTab);
+                break;
+            }
+        }
+        return nextTab;
+    }
+    return table;
+}
+```
+
+#### addCount
+这个方法也是非常有意思的，一定和size()方法来看，这个是计算数量。计算数量使用的是CounterCell来使用，我们发现size()方法是没有锁的，那在并发情况下怎么解决，那就是放在addCount这里了，先计算好，size()直接就取。
+```java
+/**
+    * A padded cell for distributing counts.  Adapted from LongAdder
+    * and Striped64.  See their internal docs for explanation.
+    */
+@sun.misc.Contended static final class CounterCell { // 计算单元格
+    volatile long value;
+    CounterCell(long x) { value = x; }
+}
+```
+`ThreadLocalRandom.getProbe()`这个是什么呢？这个是得到线程的探针哈希值，这个为了避免线程竞争，如果没有重新获取，`ThreadLocalRandom.getProbe()`对线程来说获取的值都是一个。
+```java
+/**
+    * Adds to count, and if table is too small and not already
+    * resizing, initiates transfer. If already resizing, helps
+    * perform transfer if work is available.  Rechecks occupancy
+    * after a transfer to see if another resize is already needed
+    * because resizings are lagging additions.
+    *
+    * @param x the count to add
+    * @param check if <0, don't check resize, if <= 1 only check if uncontended
+    */
+private final void addCount(long x, int check) { // 增加
+    CounterCell[] as; long b, s;
+    if ((as = counterCells) != null ||
+        !U.compareAndSwapLong(this, BASECOUNT, b = baseCount, s = b + x)) {
+        CounterCell a; long v; int m;
+        boolean uncontended = true; // 无竞争的
+        if (as == null || (m = as.length - 1) < 0 ||
+            (a = as[ThreadLocalRandom.getProbe() & m]) == null ||
+            !(uncontended =
+                U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x))) {
+            fullAddCount(x, uncontended); // 走到这里就表示baseCount加失败了，如果uncontended为false，就表示当前数组位置value已经cas失败了
+            return;
+        }
+        if (check <= 1)
+            return;
+        s = sumCount();
+    }
+    if (check >= 0) { // 扩容判断，check小于0那就是remove，移除操作
+        Node<K,V>[] tab, nt; int n, sc;
+        while (s >= (long)(sc = sizeCtl) && (tab = table) != null &&
+                (n = tab.length) < MAXIMUM_CAPACITY) {
+            int rs = resizeStamp(n);
+            if (sc < 0) {
+                if ((sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 ||
+                    sc == rs + MAX_RESIZERS || (nt = nextTable) == null ||
+                    transferIndex <= 0)
+                    break;
+                if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1))
+                    transfer(tab, nt);
+            }
+            else if (U.compareAndSwapInt(this, SIZECTL, sc,
+                                            (rs << RESIZE_STAMP_SHIFT) + 2))
+                transfer(tab, null);
+            s = sumCount();
+        }
+    }
+}
+```
+```java
+// See LongAdder version for explanation
+private final void fullAddCount(long x, boolean wasUncontended) {
+    int h;
+    if ((h = ThreadLocalRandom.getProbe()) == 0) { // 如果h == 0，就表示 h & (n - 1) 都是 0，竞争很大
+        ThreadLocalRandom.localInit();      // force initialization
+        h = ThreadLocalRandom.getProbe();
+        wasUncontended = true; // 有冲突的
+    }
+    boolean collide = false;                // True if last slot nonempty 碰撞
+    for (;;) {
+        CounterCell[] as; CounterCell a; int n; long v;
+        if ((as = counterCells) != null && (n = as.length) > 0) { // 这个就是初始化后并发操作
+            if ((a = as[(n - 1) & h]) == null) { // 数组该节点为null
+                if (cellsBusy == 0) {            // Try to attach new Cell
+                    CounterCell r = new CounterCell(x); // Optimistic create
+                    if (cellsBusy == 0 &&
+                        U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {
+                        boolean created = false;
+                        try {               // Recheck under lock
+                            CounterCell[] rs; int m, j;
+                            if ((rs = counterCells) != null &&
+                                (m = rs.length) > 0 &&
+                                rs[j = (m - 1) & h] == null) {
+                                rs[j] = r;
+                                created = true;
+                            }
+                        } finally {
+                            cellsBusy = 0;
+                        }
+                        if (created)
+                            break;
+                        continue;           // Slot is now non-empty
+                    }
+                }
+                collide = false;
+            }
+            else if (!wasUncontended)       // CAS already known to fail 如果wasUncontended = false，已经尝试过cas，必须再一次rehash
+                wasUncontended = true;      // Continue after rehash
+            else if (U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x)) // 如果直接通过cas操作x，那就是可以直接退出
+                break;
+            else if (counterCells != as || n >= NCPU) // NCPU（逻辑核） = Runtime.getRuntime().availableProcessors();
+                collide = false;            // At max size or stale
+            else if (!collide) // 冲突
+                collide = true;
+            else if (cellsBusy == 0 &&
+                        U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) { // 看这个，只有else if (!collide) 前面的else if都不成功，并且collide=true，表示非常冲突，这个时候表示CounterCell数组扩容
+                try {
+                    if (counterCells == as) {// Expand table unless stale
+                        CounterCell[] rs = new CounterCell[n << 1]; // 扩容
+                        for (int i = 0; i < n; ++i) // 迁移
+                            rs[i] = as[i];
+                        counterCells = rs;
+                    }
+                } finally {
+                    cellsBusy = 0;
+                }
+                collide = false;
+                continue;                   // Retry with expanded table
+            }
+            h = ThreadLocalRandom.advanceProbe(h); // 每一次if判断后都重新获取线程的探针哈希值，除了前面continue;
+        }
+        else if (cellsBusy == 0 && counterCells == as &&
+                    U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) { // cellsBusy表示CounterCell繁忙状态，只有操作CounterCell时才需要加入这个状态
+            boolean init = false;
+            try {                           // Initialize table
+                if (counterCells == as) {
+                    CounterCell[] rs = new CounterCell[2];
+                    rs[h & 1] = new CounterCell(x);
+                    counterCells = rs;
+                    init = true;
+                }
+            } finally {
+                cellsBusy = 0;
+            }
+            if (init)
+                break;
+        }
+        else if (U.compareAndSwapLong(this, BASECOUNT, v = baseCount, v + x)) // 操作CounterCell时失败，那就操作baseCount
+            break;                          // Fall back on using base
+    }
+}
+```
+![fullAddCount](/images/pasted-92.png)
+
+### size
+发现size方法是通过baseCount，然后加上数组CounterCell[]中value的总和，相比较1.7ConcurrentHashMap逻辑比较少，清晰
+
+```java
+/**
+    * {@inheritDoc}
+    */
+public int size() {
+    long n = sumCount();
+    return ((n < 0L) ? 0 :
+            (n > (long)Integer.MAX_VALUE) ? Integer.MAX_VALUE :
+            (int)n);
+}
+```
+```java
+final long sumCount() {
+    CounterCell[] as = counterCells; CounterCell a;
+    long sum = baseCount;
+    if (as != null) {
+        for (int i = 0; i < as.length; ++i) {
+            if ((a = as[i]) != null)
+                sum += a.value;
+        }
+    }
+    return sum;
+}
+```
+
+### get
+get逻辑相对简单
+```java
+/**
+    * Returns the value to which the specified key is mapped,
+    * or {@code null} if this map contains no mapping for the key.
+    *
+    * <p>More formally, if this map contains a mapping from a key
+    * {@code k} to a value {@code v} such that {@code key.equals(k)},
+    * then this method returns {@code v}; otherwise it returns
+    * {@code null}.  (There can be at most one such mapping.)
+    *
+    * @throws NullPointerException if the specified key is null
+    */
+public V get(Object key) {
+    Node<K,V>[] tab; Node<K,V> e, p; int n, eh; K ek;
+    int h = spread(key.hashCode());
+    if ((tab = table) != null && (n = tab.length) > 0 &&
+        (e = tabAt(tab, (n - 1) & h)) != null) {
+        if ((eh = e.hash) == h) {
+            if ((ek = e.key) == key || (ek != null && key.equals(ek)))
+                return e.val;
+        }
+        else if (eh < 0) // 非链表
+            return (p = e.find(h, key)) != null ? p.val : null;
+        while ((e = e.next) != null) { // 链表
+            if (e.hash == h &&
+                ((ek = e.key) == key || (ek != null && key.equals(ek))))
+                return e.val;
+        }
+    }
+    return null;
+}
+```
+
+```java
+static class Node<K,V> implements Map.Entry<K,V> {
+    /**
+        * Virtualized support for map.get(); overridden in subclasses.
+        */
+    Node<K,V> find(int h, Object k) {
+        Node<K,V> e = this;
+        if (k != null) {
+            do {
+                K ek;
+                if (e.hash == h &&
+                    ((ek = e.key) == k || (ek != null && k.equals(ek))))
+                    return e;
+            } while ((e = e.next) != null);
+        }
+        return null;
+    }
 }
 ```
