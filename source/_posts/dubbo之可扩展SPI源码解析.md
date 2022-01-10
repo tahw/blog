@@ -943,6 +943,16 @@ private void cacheWrapperClass(Class<?> clazz) {
 
 ##### ActivateClass
 这个是缓存类上面有@Activate注解类，具体是干嘛的，后续再补充了......
+后续补充......，最近看了下，这个注解是非常的有作用，表示一个扩展是否被激活（使用），可以放在接口上或者方法上，dubbo用它在spi扩展类定义上，表示这个扩展激活的时机和条件，这个类在服务导出的时候会重点去介绍
+
+```java
+URL url = new URL("x","",1111);
+url = url.addParameter("a","a");
+String key = "a";
+// 调用的方式
+List<HelloActivateService> activateExtension = ExtensionLoader.getExtensionLoader(HelloActivateService.class).getActivateExtension(url, key, CommonConstants.PROVIDER);
+```
+
 ```java
 /**
 * cache Activate class which is annotated with <code>Activate</code>
