@@ -1630,6 +1630,107 @@ public abstract class AbstractExporter<T> implements Exporter<T> {
 }
 ```
 
+## 服务监听
+服务导出的时候会向dubbo-admin里的动态配置的数据订阅。这个会有新老版本兼容的问题。
+> 在dubbo2.7之前，只能支持某个服务的动态配置
+> 在dubbo2.7之后，可以支持某个服务和应用的动态配置
+
+在dubbo2.7之前，监听的路径的是：
+/dubbo/org.apache.dubbo.demo.DemoService/configurators/override://0.0.0.0/org.apache.dubbo.demo.DemoService?category=configurators&compatible_config=true&dynamic=false&enabled=true&timeout=5000，其中监听的节点路径，不是节点内容
+
+
+在dubbo2.7之后，监听的路径的是：
+1. 服务监听：
+/dubbo/config/dubbo/org.apache.dubbo.demo.DemoService:1.0.0:jianghe-group.configurators
+监听的是节点内容：
+```json
+configVersion: v2.7
+configs:
+- addresses:
+  - 0.0.0.0
+  enabled: false
+  parameters:
+    timeout: 5000
+  side: consumer
+enabled: true
+key: org.apache.dubbo.demo.DemoService
+scope: service
+```
+> 注意，这里如果修改服务监听的配置，那老版本的值`/dubbo/org.apache.dubbo.demo.DemoService/configurators/override://0.0.0.0/org.apache.dubbo.demo.DemoService?category=configurators&compatible_config=true&dynamic=false&enabled=true&timeout=5000`也会随着修改
+
+2. 应用监听：
+/dubbo/config/dubbo/dubbo-demo-annotation-provider.configurators
+监听的是节点内容：
+```json
+configVersion: v2.7
+configs:
+- addresses:
+  - 0.0.0.0
+  enabled: false
+  parameters:
+    timeout: 3000
+  side: consumer
+enabled: true
+key: dubbo-demo-annotation-provider
+scope: application
+```
+
+
+<font color='red'><b>贴一下比较重要的地方，下面服务如果匹配成功的话，就会更新提供者的URL，然后重新的reExport</b></font>
+```java
+@Override
+public URL configure(URL url) {
+    // If override url is not enabled or is invalid, just return.
+    if (!configuratorUrl.getParameter(ENABLED_KEY, true) || configuratorUrl.getHost() == null || url == null || url.getHost() == null) {
+        return url;
+    }
+    /*
+        * This if branch is created since 2.7.0.
+        */
+    String apiVersion = configuratorUrl.getParameter(CONFIG_VERSION_KEY);// v2.7
+    if (StringUtils.isNotEmpty(apiVersion)) {
+        String currentSide = url.getParameter(SIDE_KEY); // provider
+        String configuratorSide = configuratorUrl.getParameter(SIDE_KEY); // consumer
+        if (currentSide.equals(configuratorSide) && CONSUMER.equals(configuratorSide) && 0 == configuratorUrl.getPort()) {
+            url = configureIfMatch(NetUtils.getLocalHost(), url);
+        } else if (currentSide.equals(configuratorSide) && PROVIDER.equals(configuratorSide) && url.getPort() == configuratorUrl.getPort()) { // 提供端匹配必须是端口要匹配
+            url = configureIfMatch(url.getHost(), url);
+        }
+    }
+    /*
+        * This else branch is deprecated and is left only to keep compatibility with versions before 2.7.0
+        */
+    else {
+        url = configureDeprecated(url);
+    }
+    return url;
+}
+```
+以下是动态修改配置调用的堆栈，然后重新导出服务reExport
+```java
+export:285, DubboProtocol (org.apache.dubbo.rpc.protocol.dubbo)
+export:62, ProtocolListenerWrapper (org.apache.dubbo.rpc.protocol)
+export:153, ProtocolFilterWrapper (org.apache.dubbo.rpc.protocol)
+export:-1, Protocol$Adaptive (org.apache.dubbo.rpc)
+reExport:345, RegistryProtocol (org.apache.dubbo.registry.integration)
+doOverrideIfNecessary:693, RegistryProtocol$OverrideListener (org.apache.dubbo.registry.integration)
+notify:667, RegistryProtocol$OverrideListener (org.apache.dubbo.registry.integration)
+notify:426, AbstractRegistry (org.apache.dubbo.registry.support)
+doNotify:373, FailbackRegistry (org.apache.dubbo.registry.support)
+notify:364, FailbackRegistry (org.apache.dubbo.registry.support)
+doSubscribe:180, ZookeeperRegistry (org.apache.dubbo.registry.zookeeper)
+doRetry:44, FailedSubscribedTask (org.apache.dubbo.registry.retry)
+run:124, AbstractRetryTask (org.apache.dubbo.registry.retry)
+expire:648, HashedWheelTimer$HashedWheelTimeout (org.apache.dubbo.common.timer)
+expireTimeouts:727, HashedWheelTimer$HashedWheelBucket (org.apache.dubbo.common.timer)
+run:449, HashedWheelTimer$Worker (org.apache.dubbo.common.timer)
+run:748, Thread (java.lang)
+```
+
+
+
+
+
 # 总结
 我们的猜想其实和服务导出的逻辑差不多，那我们这时候再总结下
 ```text
