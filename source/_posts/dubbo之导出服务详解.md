@@ -877,7 +877,7 @@ NettyServer的父类AbstractPeer中存在received方法，该方法没有做什�
 ```
 
 3. MultiMessageHandler
-MultiMessageHandler会判断message是MultiMessage，如果是的话，会循环该message，传给下一层Handler（HeartbeatHandler，这个msg对象是确定的），如果不是的话，直接传给下一层Handler（HeartbeatHandler）
+MultiMessageHandler会判断message是MultiMessage（就是多个Invocation合并成一个），如果是的话，会循环该message，传给下一层Handler（HeartbeatHandler，这个msg对象是确定的），如果不是的话，直接传给下一层Handler（HeartbeatHandler）
 
 ```java
 @SuppressWarnings("unchecked")
@@ -938,7 +938,8 @@ public void received(Channel channel, Object message) throws RemotingException {
 
 5. AllChannelHandler
 
-将msg封装成一个ChannelEventRunnable对象，然后把对象放进到线程池里，异步来处理msg，在ChannelEventRunnable里的run会调用下一层DecodeHandler
+<font color='red'><b>这个是相当重要的handler，逻辑将msg封装成一个ChannelEventRunnable对象，然后把对象放进到线程池里，异步来处理msg，在ChannelEventRunnable里的run会调用下一层DecodeHandler，那这里要说明下，其实是把Netty里的IOThreads换成线程池处理，这里就释放了IOThreads的压力。</b></font>
+
 ```java
 @Override
 public void received(Channel channel, Object message) throws RemotingException {
@@ -1025,6 +1026,15 @@ public class ChannelEventRunnable implements Runnable {
     }
 }
 ```
+
+再次说明下，其实这里是dubbo的线程模型，详细的可看：https://dubbo.apache.org/zh/docs/advanced/thread-model/
+![线程模型](/images/dubbo-protocol.jpg)
+Dispatcher
+* `all`所有消息都派发到线程池，包括请求，响应，连接事件，断开事件，心跳等
+* `direct`所有消息都不派发到线程池，全部在 IO 线程上直接执行
+* `message`只有请求响应消息派发到线程池，其它连接断开事件，心跳等消息，直接在 IO 线程上执行
+* `execution`只有请求消息派发到线程池，不含响应，响应和其它连接断开事件，心跳等消息，直接在 IO 线程上执行
+* `connection`在 IO 线程上，将连接断开事件放入队列，有序逐个执行，其它消息派发到线程池
 
 6. DecodeHandler
 通过received来接受信息，会对msg解码，调用下一层Handler(HeaderExchangeHandler)
