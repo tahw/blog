@@ -1017,7 +1017,6 @@ public void subscribe(URL url) {
     }
 ```
 10. 调用mergeUrl(providerUrl)来获取最终的URL，这里providerUrl是提供者url
-    1. 
 ```java
 /**
      * Merge url parameters. the order is: override > -D >Consumer > Provider
@@ -1088,6 +1087,7 @@ private URL overrideWithConfigurator(URL providerUrl) {
 11.`new InvokerDelegate<>(protocol.refer(serviceType, url), url, providerUrl)`其中`protocol.refer(serviceType, url)`会获取到Invoker，然后将结果作为属性创建InvokerDelegate，直接返回
 12. <font color='red'><b>protocol.refer(serviceType, url)这里的protocol是DubboProtocol，这里同样会经过Wrapper类，ProtocolFilterWrapper、ProtocolListenerWrapper调用后，最终会调用DubboProtocol.refer，逻辑和服务导出有点类似，这里直接出结果，不仔细描述，可以跟着代码走一下</b></font>
 13. 那最终得到的Invoker是什么？
+
 ```java
 RegistryDirectory$InvokerDelegate ->
     ListenerInvokerWrapper ->
@@ -1097,6 +1097,7 @@ RegistryDirectory$InvokerDelegate ->
 ```
 
 # 总结
+
 1. ReferenceBean.get()获取代理类
 2. 如果调用方法，直接调用到InvokerInvocationHandler
 3. 其中的Invoker其实是下面的
@@ -1113,12 +1114,15 @@ MockClusterInvoker ->
                             ProtocolFilterWrapper$Invoker(Invoker$0(ConsumerContextFilter) -> Invoker$1(FutureFilter) -> Invoker$2(MonitorFilter)) ->
                                 AsyncToSyncInvoker ->
                                     DubboInvoker
+
+
+1. MockClusterInvoker：完成mock功能
+2. FailoverClusterInvoker：完成集群容错功能，重试功能
+3. ProtocolFilterWrapper$Invoker：完成对filter调用
+4. DubboInvoker：通过dubbo协议发送数据
 ```
-    1. MockClusterInvoker：完成mock功能
-    2. FailoverClusterInvoker：完成集群容错功能，重试功能
-    3. ProtocolFilterWrapper$Invoker：完成对filter调用
-    4. DubboInvoker：通过dubbo协议发送数据
 4. NettyClient连接，发送请求返回（这块调用的时候仔细看下）
 
 # 附录
+
 见源码：https://github.com/tahw/dubbo
