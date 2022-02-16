@@ -850,6 +850,7 @@ public void subscribe(URL url) {
 0 = {URL@4147} "dubbo://127.0.0.1:21881/org.apache.dubbo.demo.DemoService?anyhost=true&application=dubbo-demo-annotation-provider&deprecated=false&dubbo=2.0.2&dynamic=true&generic=false&group=jianghe-group&interface=org.apache.dubbo.demo.DemoService&loadbalance=leastactive&methods=sayHello,sayHelloAsync&pid=17908&release=&revision=1.0.0&side=provider&timeout=1000&timestamp=1644205565914&version=1.0.0"
 1 = {URL@4148} "dubbo://127.0.0.1:21880/org.apache.dubbo.demo.DemoService?anyhost=true&application=dubbo-demo-annotation-provider&deprecated=false&dubbo=2.0.2&dynamic=true&generic=false&group=jianghe-group&interface=org.apache.dubbo.demo.DemoService&loadbalance=leastactive&methods=sayHello,sayHelloAsync&pid=17908&release=&revision=1.0.0&side=provider&timeout=5000&timestamp=1644205564950&version=1.0.0"
 ```
+其中toInvokers就是url转Invoker，routerChain.setInvokers(newInvokers)这个是完善TagRouter，TagRouter需要服务提供者名称来配置规则，就是获取到提供者的URL上才能解析标签路由
 ```java
 /**
      * Convert the invokerURL list to the Invoker Map. The rules of the conversion are as follows:
@@ -1094,6 +1095,44 @@ RegistryDirectory$InvokerDelegate ->
         ProtocolFilterWrapper$Invoker(Invoker$0(ConsumerContextFilter) -> Invoker$1(FutureFilter) -> Invoker$2(MonitorFilter)) ->
            AsyncToSyncInvoker ->
                 DubboInvoker
+```
+
+## DubboInvoker
+构建DubboInvoker，底层会构建client，构建client也会启动netty，详细可看下面流程图。
+<font color='red'><b>和服务导出的时候类似，客户端也会有从服务端返回数据过来，这里也有handler处理
+NettyClientHandler -> NettyClient -> MultiMessageHandler -> HeartbeatHandler -> AllChannelHandler -> DecodeHandler -> HeaderExchangeHandler -> DubboProtocol$ExchangeHandlerAdapter
+里面除了NettyClientHandler -> NettyClient（AbstractPeer#received）和服务端不一样，其他的handler和服务导出导出一样，但是仔细看下代码，发现消费者handler和服务者handler是一样的
+</b></font>
+
+
+
+
+流程图
+![DubboInvoker](/images/dubbo-6-4.png)
+
+```java
+@Override
+public abstract class AbstractProtocol implements Protocol {
+
+    public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
+        return new AsyncToSyncInvoker<>(protocolBindingRefer(type, url));
+    }
+}
+```
+```java
+public class DubboProtocol extends AbstractProtocol {
+
+@Override
+    public <T> Invoker<T> protocolBindingRefer(Class<T> serviceType, URL url) throws RpcException {
+        optimizeSerialization(url);
+
+        // create rpc invoker.
+        DubboInvoker<T> invoker = new DubboInvoker<T>(serviceType, url, getClients(url), invokers);
+        invokers.add(invoker);
+
+        return invoker;
+    }
+}
 ```
 
 # 总结

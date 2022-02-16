@@ -1156,7 +1156,7 @@ void handleRequest(final ExchangeChannel channel, Request req) throws RemotingEx
     }
 ```
 8. ExchangeHandlerAdapter
-这个处理器是真正处理器，reply是返回对象的，真正返回对象的invoker.invoke执行的结果，而是received是不返回对象的
+<font color='red'><b>这个处理器是真正处理器，reply是返回对象的，真正返回对象的invoker.invoke执行的结果，而是received是不返回对象的，其中请求过来是Invocation对象，然后根据Invocation对象拿到serviceKey，然后再从exporterMap里面获取DubboExporter，然后真正获取Invoker，拿到Invoker后就会调用Invoker.invoke方法真正调用结果</b></font>
 
 ```java
 private ExchangeHandler requestHandler = new ExchangeHandlerAdapter() {
@@ -1261,6 +1261,42 @@ private ExchangeHandler requestHandler = new ExchangeHandlerAdapter() {
             return invocation;
         }
     };
+```
+```java
+Invoker<?> getInvoker(Channel channel, Invocation inv) throws RemotingException {
+        boolean isCallBackServiceInvoke = false;
+        boolean isStubServiceInvoke = false;
+        int port = channel.getLocalAddress().getPort();
+        String path = (String) inv.getObjectAttachments().get(PATH_KEY);
+
+        // if it's callback service on client side
+        isStubServiceInvoke = Boolean.TRUE.toString().equals(inv.getObjectAttachments().get(STUB_EVENT_KEY));
+        if (isStubServiceInvoke) {
+            port = channel.getRemoteAddress().getPort();
+        }
+
+        //callback
+        isCallBackServiceInvoke = isClientSide(channel) && !isStubServiceInvoke;
+        if (isCallBackServiceInvoke) {
+            path += "." + inv.getObjectAttachments().get(CALLBACK_SERVICE_KEY);
+            inv.getObjectAttachments().put(IS_CALLBACK_SERVICE_INVOKE, Boolean.TRUE.toString());
+        }
+
+        String serviceKey = serviceKey(
+                port,
+                path,
+                (String) inv.getObjectAttachments().get(VERSION_KEY),
+                (String) inv.getObjectAttachments().get(GROUP_KEY)
+        );
+        DubboExporter<?> exporter = (DubboExporter<?>) exporterMap.get(serviceKey);
+
+        if (exporter == null) {
+            throw new RemotingException(channel, "Not found exported service: " + serviceKey + " in " + exporterMap.keySet() + ", may be version or group mismatch " +
+                    ", channel: consumer: " + channel.getRemoteAddress() + " --> provider: " + channel.getLocalAddress() + ", message:" + getInvocationWithoutData(inv));
+        }
+
+        return exporter.getInvoker();
+    }
 ```
 
 ## Invoker
@@ -1392,10 +1428,10 @@ private static <T> Invoker<T> buildInvokerChain(final Invoker<T> invoker, String
 
 
 ## Exporter
-<font color='red'><b>DestroyableExporter->ExporterChangeableWrapper->ListenerExporterWrapper->DubboExporter</b></font>
+<font color='red'><b>这是一个Dubbo链，这个地方用在哪里？其实是在服务导出失败后的操作，DestroyableExporter->ExporterChangeableWrapper->ListenerExporterWrapper->DubboExporter</b></font>
 1. DestroyableExporter
 
-最重要的用用unexport
+最重要的用unexport
 ```java
  private static class DestroyableExporter<T> implements Exporter<T> {
 
