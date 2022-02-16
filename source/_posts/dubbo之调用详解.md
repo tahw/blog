@@ -160,7 +160,47 @@ NettyServerHandler->
 18. AbstractClient.send
 19. 调用NettyChannel.send方法，调用NioSocketChannel.writeAndFlush方法，最底层是Netty非阻塞式发送数据
 
+## 消费端异常处理
+我们知道服务提供者如果出现异常，其实是包装成AppResponse正常信息返回，那消费者需要抛出这个异常信息，那这块是在哪里做的？在InvokerInvocationHandler.invoke返回值的recreate方法，这个最终会调用到AppResponse#recreate，里面包含异常信息就throw抛出
+```java
+public class InvokerInvocationHandler implements InvocationHandler {
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        // ...
+        // AsyncRpcResult.recreate -> AppResponse.recreate
+        return invoker.invoke(rpcInvocation).recreate();
+    }
 
+}
+```
+```java
+public class AppResponse implements Result {
+    @Override
+    public Object recreate() throws Throwable {
+        if (exception != null) {
+            // fix issue#619
+            try {
+                // get Throwable class
+                Class clazz = exception.getClass();
+                while (!clazz.getName().equals(Throwable.class.getName())) {
+                    clazz = clazz.getSuperclass();
+                }
+                // get stackTrace value
+                Field stackTraceField = clazz.getDeclaredField("stackTrace");
+                stackTraceField.setAccessible(true);
+                Object stackTrace = stackTraceField.get(exception);
+                if (stackTrace == null) {
+                    exception.setStackTrace(new StackTraceElement[0]);
+                }
+            } catch (Exception e) {
+                // ignore
+            }
+            throw exception;
+        }
+        return result;
+    }
+}
+```
 
 
 # 服务提供者执行逻辑
