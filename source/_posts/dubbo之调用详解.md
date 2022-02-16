@@ -150,12 +150,12 @@ NettyServerHandler->
 8. FutureFilter.invoke
 9. MonitorFilter.invoke，设置monitor_filter_start_time属性，方法的执行次数+1
 10. ListenerInvokerWrapper.invoke没做什么
-11. AsyncToSyncInvoker.invoke，异步转同步，先调用下层Invoker异步执行，然后阻塞Integer.MAX_VALUE毫秒获取结果
+11. <font color='red'><b>AsyncToSyncInvoker.invoke，异步转同步，先调用下层Invoker异步执行，如果是同步方法就会阻塞Integer.MAX_VALUE毫秒获取结果</b></font>
 12. AbstractInvoker.invoke：先调用DubboInvoker.doInvoke方法，如果出现异常，转换为AsyncRpcResult返回
 13. DubboInvoker.doInvoke，从clients选择一个client进行发生数据，如果不用返回结果，则调用client.send，如果需要返回结果，则调用client.request，得到结果后，封装成AsyncRpcResult对象返回结果
 14. 这里调用的ReferenceCountExchangeClient.request，没有做什么，调用下一层
 15. HeaderExchangeClient.request，这里没有做什么，调用下一层
-16. HeaderExchangeChannel.request，这里构建Request，并且会构造一个DefaultFuture对象来返回，其中DefaultFuture会阻塞timeout（用户配置，默认1s）的时间来等待结果，DefaultFuture也是实现CompletableFuture，在构造DefaultFuture的时候，会把requestId和DefaultFuture放进去FUTURES map里，当提供者返回结果，就会调用HeaderExchangeHandler.handleResponse的方法，这时候会调用DefaultFuture.received方法，根据FUTURES map来获取DefaultFuture，然后执行DefaultFuture.doReceived方法，返回Response
+16. <font color='red'><b>HeaderExchangeChannel.request，这里构建Request，并且会构造一个DefaultFuture对象来返回，其中DefaultFuture会阻塞timeout（用户配置，默认1s）的时间来等待结果，DefaultFuture也是实现CompletableFuture，在构造DefaultFuture的时候，会把requestId和DefaultFuture放进去FUTURES map里，当提供者返回结果，就会调用HeaderExchangeHandler.handleResponse的方法，这时候会调用DefaultFuture.received方法，根据FUTURES map来获取DefaultFuture，然后执行DefaultFuture.doReceived方法，返回Response</b></font>
 17. AbstractPeer.send方法，没有做什么
 18. AbstractClient.send
 19. 调用NettyChannel.send方法，调用NioSocketChannel.writeAndFlush方法，最底层是Netty非阻塞式发送数据
@@ -171,7 +171,7 @@ NettyServerHandler->
 4. HeartbeatHandler.received，判断msg是心跳请求，是的话返回response，如果是心跳响应，不做什么，最后则调用下一层
 5. AllChannelHandler.received，把msg构建成ChannelEventRunnable，放到线程池里面，然后在ChannelEventRunnable里的run方法调用下一层
 6. DecodeHandler.received，反编译，设置RpcInvocation methodName、parameterTypes、arguments、attachments等属性，然后调用下一层
-7. HeaderExchangeHandler.received，先构建Response对象，调用下层的ExchangeHandlerAdapter.reply方法返回CompletionStage对象，CompletionStage是CompletableFuture父类，然后CompletionStage.whenComplete方法绑定回调函数，当ExchangeHandlerAdapter.reply返回结果，就会设置Response对象，有channal.send
+7. <font color='red'><b>HeaderExchangeHandlerHeaderExchangeHandler.handleRequest方法，先构建Response对象，调用下层的ExchangeHandlerAdapter.reply方法返回CompletionStage对象，CompletionStage是CompletableFuture父类，然后CompletionStage.whenComplete方法绑定回调函数，当ExchangeHandlerAdapter.reply返回结果，就会设置Response对象，然后返回到消费者</b></font>
 8. ExchangeHandlerAdapter.reply，从exporter获取Invoker，然后执行Invoker.invoke
 9. 这里的就会执行ProtocolFilterWrapper$Invoker的Filter链，当Filter执行完返回结果后，就会执行Result#whenCompleteWithContext
 10. EchoFilter.invoke，判断当前请求是不是一个回声测试，如果是，则不后续调用了，否则调用下一层
@@ -184,7 +184,7 @@ NettyServerHandler->
 17. ExceptionFilter.invoke，没有做什么，直接调用下一层，但是后面执行完成，会回调ExceptionFilter.onResponse方法，对不同的异常做处理
 18. InvokerWrapper.invoke 没有做什么，调用下一层
 19. AbstractProxyInvoker.invoke，没有做什么，直接调用下一层
-20. AbstractProxyInvoker.invoke，先调用JavassistProxyFactory.getInvoker里面的wrapper.invokeMethod方法，调用真正的方法返回，包装成CompletableFuture，然后再包装成AsyncRpcResult返回
+20. <font color='red'><b>AbstractProxyInvoker.invoke，先调用JavassistProxyFactory.getInvoker里面的wrapper.invokeMethod方法，调用真正的方法返回，包装成CompletableFuture，这里然后执行方法CompletableFuture.handle，等待CompletableFuture执行完再包装成AsyncRpcResult返回</b></font>
 
 ## 服务端异常处理
 ExceptionFilter是服务端过滤器，当结果返回后，会执行onResponse方法，此方法来判断异常信息
