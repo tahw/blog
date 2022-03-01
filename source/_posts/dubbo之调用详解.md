@@ -201,6 +201,7 @@ public class AppResponse implements Result {
     }
 }
 ```
+ps:这里在说明一点，是什么样的错误dubbo才会容错呢？如果是业务异常，正常抛出，也不会mock，也不会容错，如果是系统的异常RpcException（超时异常、系统异常）则会mock容错
 
 
 # 服务提供者执行逻辑
