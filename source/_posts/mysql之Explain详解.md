@@ -329,6 +329,15 @@ explain select * from zoo_animals where animals_id > 1 limit 2;
 ```
 ![执行结果](/images/mysql-2-13.jpg)
 
+### Using filesort
+order by 操作，不使用索引的方式
+
+```sql
+explain select * from animals order by name;
+```
+![执行结果](/images/mysql-2-25.png)
+
+
 
 # 索引实践
 
