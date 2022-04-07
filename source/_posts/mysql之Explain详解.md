@@ -200,7 +200,7 @@ select 3;
 | 12 | ALL |A full table scan is done for each combination of rows from the previous tables|全表扫描，没有使用索引|
 
 ### null
-下面值为null，这表示mysql在执行的时候是需要访问表和索引，直接能拿到结果
+下面值为null，这表示mysql在执行的时候是不需要访问表和索引，直接能拿到结果
 ```sql
 explain select min(id) from animals ;
 ```
