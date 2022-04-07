@@ -584,7 +584,7 @@ explain select * from person where name like '张三%' and province = '广东省
 索引的选择先是查询，然后再根据order by选择索引
 
 #### sort buffer
-提起order by，一定会有sort buffer，这个是把对应数据拿过来后在这里进行排序，这个大小只有1M
+提起order by，一定会有sort buffer，这个是把对应数据拿过来后在这里进行排序，这个大小只有1KB
 ```sql
 show variables like '%innodb_sort_buffer_size%';
 ```
