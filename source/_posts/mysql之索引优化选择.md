@@ -578,7 +578,7 @@ explain select * from person where name like '张三%' and province = '广东省
 ![执行结果](/images/mysql-4-9.jpg)
 这个直接就不走索引了，直接采用聚簇索引扫描，为什么？看下rows，量太大，更不会走索引下推。
 
-> 那这里会有疑问？范围查找<、>怎么不使用索引下推？这个就跟数据集有关系，我们一般任务范围查找是数据结果集大，like查询数据集小才会使用索引下推。like数据集大也不会走索引下推。
+> 那这里会有疑问？范围查找<、>怎么不使用索引下推？这个就跟数据集有关系，我们一般认为范围查找是数据结果集大，like查询数据集小才会使用索引下推。like数据集大也不会走索引下推。
 
 ### 查询结合order by排序使用
 索引的选择先是查询，然后再根据order by选择索引
@@ -1201,7 +1201,7 @@ set max_length_for_sort_data = 1024
 
 | sql | 单路排序执行流程 | 多路排序执行流程 |
 | :-- | :---     | :---    |
-|select * from person where name = '张三' order by gender;|1. 从索引name找到第一个name='张三'条件的主键<br><font color='red'><b>2. 然后根据聚簇索引查找所有字段放入sort_buffer里面<b></font><br>3. 重复1.2操作，知道找不到name='张三'<br>4. 对sort_buffer里面数据按照gender排序<br>5. 结果集返回客户端|1. 从索引name找到第一个name='张三'条件的主键<br><font color='red'><b>2. 然后根据聚簇索引后，拿出gender和主键id放入sort_buffer里面<b></font><br>3. 重复1.2操作，知道找不到name='张三'<br>4. 对sort_buffer里面数据按照gender排序<br><font color='red'><b>5. 拿出排序好的id，然后回表聚簇索引，拿出所有的数据集返回客户端<b></font>|
+|select * from person where name = '张三' order by gender;|1. 从索引name找到第一个name='张三'条件的主键<br><font color='red'><b>2. 然后根据聚簇索引查找所有字段放入sort_buffer里面<b></font><br>3. 重复1.2操作，直到找不到name='张三'<br>4. 对sort_buffer里面数据按照gender排序<br>5. 结果集返回客户端|1. 从索引name找到第一个name='张三'条件的主键<br><font color='red'><b>2. 然后根据聚簇索引后，拿出gender和主键id放入sort_buffer里面<b></font><br>3. 重复1.2操作，直到找不到name='张三'<br>4. 对sort_buffer里面数据按照gender排序<br><font color='red'><b>5. 拿出排序好的id，然后回表聚簇索引，拿出所有的数据集返回客户端<b></font>|
 
 > 如果sort buffer配置的比较小，那我们其实可以适当把`max_length_for_sort_data`大小调整小一点，尽量使用双路排序算法，sort buffer可以排序更多的行，只是在回表再查一下需要的字段，这样的效率会更高。反之也是这样。
 
@@ -1209,7 +1209,7 @@ set max_length_for_sort_data = 1024
 ```sql
 select * from person limit 100000,10;
 ```
-<font color='red'><b>查出的逻辑是：先从person取出100010行数据。然后抛去10000行数据，然后取出后面10行。如果表足够大，执行效率非常低。</b></font>
+<font color='red'><b>查出的逻辑是：先从person取出100010行数据。然后抛去100000行数据，然后取出后面10行。如果表足够大，执行效率非常低。</b></font>
 ![执行结果](/images/mysql-4-17.jpg)
 
 
@@ -1217,7 +1217,7 @@ select * from person limit 100000,10;
 select id from person limit 100000,10;
 ```
 ![执行结果](/images/mysql-4-18.jpg)
-看下结果，只是查询字段id，得到的结果却和上面不一致？为什么？<font color='red'><b>看下下面的执行计划，使用的索引，使用的索引是不一致的。上面是使用全表扫描，下面是使用age索引，最简单二级索引，二级索引里面是存在主键id字段。所有拿到的结果是不一致的。</b></font>
+看下结果，只是查询字段id，得到的结果却和上面不一致？为什么？<font color='red'><b>看下下面的执行计划，使用的索引，使用的索引是不一致的。上面是使用全表扫描，下面是使用age索引，最简单二级索引，二级索引里面是存在主键id字段。所以拿到的结果是不一致的。</b></font>
 
 | sql | 结果|
 | :-- | :-- |
@@ -1295,12 +1295,12 @@ explain select * from person_small inner join person p on person_small.province 
 ```
 | 指标 | NLJ | BNL |
 | :-- | :-- | :-- |
-|执行过程|1. 首先区分person_small为驱动表<br> 2. <font color='red'><b>然后从person_small（如果有where条件，是先会筛选的）里面读取一行数据到sort buffer里面</b></font><br> 3. 取出age字段，然后到person里面查找<br> 4. 拿到匹配的行合并到数据集<br> 5. 重复2、3、4操作最终得到数据集返回客户端 | 1.首先区分person_small为驱动表<br> 2. <font color='red'><b>然后从person_small所有的数据到sort buffer里面（如果sort buffer不够，则会分段放）</b></font><br> 3. 把person的每一行拿出来和join buffer里面的数据比较<br> 4. 拿出结果集返回给客户端 |
-|扫描行数| <font color='red'><b>person_small扫描了全表100行，person走的索引也是100行，总共200行</b></font> | 1. <font color='red'><b>person_small扫描了全表100行，person没有走索引也是全表扫描10000行，总共10100行</b></font><br> 2. <font color='red'><b>如果sort buffer不够的话，只能存50行person_small，比较完50行的person_small后就会清空join buffer，然后扫描接下来的50条，重新扫描person</b></font>，对应的会扫描100行的person_small+两次的person10000行，就是20100行 |
+|执行过程|1. 首先区分person_small为驱动表<br> 2. <font color='red'><b>然后从person_small（如果有where条件，是先会筛选的）里面读取一行数据到join buffer里面</b></font><br> 3. 取出age字段，然后到person里面查找<br> 4. 拿到匹配的行合并到数据集<br> 5. 重复2、3、4操作最终得到数据集返回客户端 | 1.首先区分person_small为驱动表<br> 2. <font color='red'><b>然后从person_small所有的数据到join buffer里面（如果join buffer不够，则会分段放）</b></font><br> 3. 把person的每一行拿出来和join buffer里面的数据比较<br> 4. 拿出结果集返回给客户端 |
+|扫描行数| <font color='red'><b>person_small扫描了全表100行，person走的索引也是100行，总共200行</b></font> | 1. <font color='red'><b>person_small扫描了全表100行，person没有走索引也是全表扫描10000行，总共10100行</b></font><br> 2. <font color='red'><b>如果join buffer不够的话，只能存50行person_small，比较完50行的person_small后就会清空join buffer，然后扫描接下来的50条，重新扫描person</b></font>，对应的会扫描100行的person_small+两次的person10000行，就是20100行 |
 |判断次数| 一行一行比较就是100次 | 100 * 10000次 |
 
 #### 如果BNL算法采用NLJ算法关联效率
-拿person_small 是100行数据，person是10000行数据距离，扫描的行数会变成100 * 10000。这个扫描其实是磁盘的操作，肯定没有100 * 10000比较快。
+拿person_small 是100行数据，person是10000行数据距离，扫描的行数会变成100 * 10000。这个扫描其实是磁盘的操作，肯定没有内存计算的100 * 10000快。
 
 #### 优化方式
 1. 关联字段加索引，尽量使用NLJ算法
