@@ -69,7 +69,7 @@ Database transactions, as implemented by InnoDB, have properties that are collec
 ![脏写](/images/mysql-5-1.png)
 
 * 脏读
-<font color='red'><b>一个事务A读取到另外一个事务B已经修改的数据但是没有提交的，还对此做的操作，这就叫做脏读。，如果事务B回滚操作，不符合一致性的要求。</b></font>
+<font color='red'><b>一个事务A读取到另外一个事务B已经修改的数据但是没有提交的，还对此做的操作，这就叫做脏读。如果事务B回滚操作，不符合一致性的要求。</b></font>
 ![脏读](/images/mysql-5-2.png)
 
 * 不可重复读
@@ -153,12 +153,12 @@ lock tables tahw.person write ;
 1. 在第8步的时候没有出现脏读
 2. 在第8步和第10步结果没有不一致，解决了不可重复读
 3. 但是在11步的时候更新id=9的数据，第12步的name也变成了beijing。这个结果就是幻读。我只是更新了input_time的字段，name没有调整。
-<font color='red'><b>数据一致性没有破坏，可重复读下面使用了MVCC机制(多版本并发控制)，select不会更新版本号，读取的是历史版本，而insert、update和delete是会更新版本的。</b></font>
+4. <font color='red'><b>第14步为什么读取的之前的数据？数据一致性没有破坏，可重复读下面使用了MVCC机制(多版本并发控制)，select不会更新版本号，读取的是历史版本，而insert、update和delete是会更新版本的。</b></font>
 
 #### 间隙锁(Gap Lock)
 间隙锁在某种情况下可以解决可重复读下产生的幻读。什么是间隙锁？其实就是行的空隙。在相互更新的情况下会相互影响
 ![间隙锁](/images/mysql-5-13.png)
-<font color='red'><b>id的间隙就是(1,9)、（10，20）、（20，无穷大）这三个区间，事务A更新id在（8，19）数据，更新id = 20不能更新，更新id = 1可以更新。这个就是事务A在（8，19）上加了间隙锁，但是为什么20包括在内，20是临键锁。那其实是（1，20]都被加上锁了。其他是临键锁。</b></font>
+<font color='red'><b>id的间隙就是(1,9)、（10，20）、（20，无穷大）这三个区间，事务A更新id在（8，19）数据。这个时候事务B如果更新id = 20不能更新，更新id = 1可以更新。这个就是事务A在（8，19）上加了间隙锁，但是为什么20包括在内，20是临键锁。那其实是（1，20]都被加上锁了。其他是临键锁。</b></font>
 
 ![间隙锁](/images/mysql-5-14.png)
 
@@ -360,7 +360,7 @@ END OF INNODB MONITOR OUTPUT
 
 # 锁优化建议
 
-1. <font color='red'><b>尽量使用索引来操作，不让有可能会让行锁变成表锁</b></font>
+1. <font color='red'><b>尽量使用索引来操作，不要让行锁升级为表锁</b></font>
 2. <font color='red'><b>尽可能减少范围更新，避免间隙锁</b></font>
 3. <font color='red'><b>合理使用索引，尽量缩小锁的范围</b></font>
 
