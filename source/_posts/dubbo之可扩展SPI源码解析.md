@@ -19,6 +19,7 @@ https://dubbo.apache.org/zh/docsv2.7/dev/source/adaptive-extension/
 ## SPI应用
 
 这里是引用github dubbo master的代码，版本是2.7.7-SNAPSHOT
+见：https://github.com/tahw/dubbo
 
 ### 引用
 新增模块，要使用dubbo，需引入下面pom
@@ -66,16 +67,17 @@ public interface HelloService {
 }
 ```
 
-其中的wrapper是不需要增加key的，key也可以配置多个
-文件路径：META-INF/dubbo/com.apache.dubbo.api.HelloService
+对应spi文件路径：META-INF/dubbo/com.apache.dubbo.api.HelloService
 ```text
 default,default1=com.apache.dubbo.service.DefaultHelloService
 java=com.apache.dubbo.service.JavaHelloService
 com.apache.dubbo.wrapper.HelloServiceWrapper
 com.apache.dubbo.wrapper.HelloServiceWrapper2
 ```
+> 普通的实现类key可以配置多个，多个用逗号来分隔
+注意其中的wrapper是不需要配置key的，里面可以配置多个Wrapper类
 
-#### 代码块
+#### 例子
 ```java
 package com.apache.dubbo.service;
 
@@ -129,22 +131,22 @@ package com.apache.dubbo.wrapper;
 
 import com.apache.dubbo.api.HelloService;
 
-public class HelloServiceWrapper implements HelloService {
+public class HelloServiceWrapper2 implements HelloService {
 
     private HelloService helloService;
 
-    public HelloServiceWrapper(HelloService helloService) {
+    public HelloServiceWrapper2(HelloService helloService) {
         this.helloService = helloService;
     }
 
     @Override
     public void hello() {
-        System.out.println("wrapper before");
+        System.out.println("wrapper before2");
         helloService.hello();
     }
 }
 ```
-<font color='red'><b>这里的类后缀名为wrapper，就是表示aop增强类，这里的wrapper类也是需要实现spi接口，然后还需要一个带有接口参数的构造函数，这个其实就是适配器模式，这样dubbo会根据构造函数设置接口类，然后Wrapper也可以加一些其他的逻辑</b></font>
+<font color='red'><b>一般把这里的类命名后缀名为wrapper，就是表示aop增强类，这里的wrapper类也是需要实现spi接口，然后还需要一个带有接口参数的构造函数，这个其实就是适配器模式，这样dubbo会根据构造函数设置接口类，然后Wrapper也可以加一些其他的逻辑</b></font>
 
 ```java
 package com.apache.dubbo;
@@ -215,7 +217,7 @@ b=com.apache.dubbo.service.BImpl
 bOther=com.apache.dubbo.service.BOtherImpl
 ```
 
-#### 代码块
+#### 例子
 ```java
 package com.apache.dubbo.service;
 
@@ -277,15 +279,17 @@ public class BOtherImpl implements B {
 }
 ```
 
-<font color='red'><b>在AImpl里面注入B，在AImpl里面需要添加setter()方法，dubbo ioc，就是通过setter方法来赋值，还有一点是需要注意的，这里要注入的B，其实就是下面两种
-1. @Adaptive类
-2. 没有@Adaptive修饰的类，dubbo根据@Adaptive方法来生成的代理类，dubbo生成的代理类需要有两个条件，一个是@Adaptive修饰方法，另外一个就是方法参数需要有URL参数，为什么需要URL，后续源码来解释
+<font color='red'><b>注意dubbo ioc是通过Adaptive来实现的。在AImpl里面注入B，在AImpl里面需要添加setter()方法，dubbo ioc，就是通过setter方法来赋值，还有一点是需要注意的，这里要注入的B，其实就是下面两种方式
+1. B是@Adaptive修饰类
+2. B里面有@Adaptive修饰方法，dubbo根据@Adaptive方法来生成代理类，代理类需要下面两个条件
+    1. 一个是@Adaptive修饰方法
+    2. 方法参数需要有URL参数
 </b></font>
 
 #### @Adaptive
-介绍dubbo ioc，一定会跟@Adaptive相关系，先介绍下@Adaptive，这个注解是做什么的呢？Adaptive可以注释在类上或者方法上，那注释不同的地方其实含义是不一样的，<font color='red'><b>当Adaptive注释在类上，Dubbo不会为该类生成代理类。注释在方法上，Dubbo则会为该方法生成代理逻辑。</b></font>Adaptive注释在类上很少，分别是 AdaptiveCompiler 和 AdaptiveExtensionFactory。其他情况都是由dubbo来生成代理类
+@Adaptive是作用于依赖注入IOC来说，这里介绍下@Adaptive，@Adaptive可以注释在类上或者方法上，那注释不同的地方其实含义是不一样的，<font color='red'><b>当Adaptive注释在类上，Dubbo不会为该类生成代理类。注释在方法上，Dubbo则会为该方法生成代理逻辑。</b></font>Adaptive注释在类上很少，分别是 AdaptiveCompiler 和 AdaptiveExtensionFactory。其他情况都是由dubbo来生成代理类
 
-#### IOC场景一
+##### IOC场景一
 > 存在@Adaptive实现类注入不随参数的改变而改变
 
 ```java
@@ -308,12 +312,13 @@ public class TestSpiIoc {
         System.out.println(a.getB().b(url));
     }
 }
+
+# 输出结果是bOtherImpl，BOtherImpl类上有@Adaptive
 ```
 <b>注意输出还是：bOtherImpl，只有一个实现类中类上面有@Adaptive注解，这里注入的就是该类，不会伴随参数的改变而改变</b>
 
-#### IOC场景二
-> 只存在一个类，而且被@Adaptive修饰
-<font color='red'><b>这种场景是注入不成功的，没有一个普通的实现类，是注入不成功的</b></font>，至于为什么？源码来解释......
+##### IOC场景二
+> 只存在一个实现类，而且被@Adaptive修饰，<font color='red'><b>这种场景是注入不成功的，没有一个普通的实现类，是注入不成功的</b></font>
 
 如果这种场景，如果我想获取扩展类，是采用getAdaptiveExtension获取对象
 ```java
@@ -331,10 +336,12 @@ public class TestSpiAdaptive {
         System.out.println(b.b(new URL()));
     }
 }
+
+# 这里能返回B的@Adaptive 注解的类
 ```
 
-#### IOC场景三
-> 不存在@Adaptive类，生成代理类
+##### IOC场景三
+> 不存在@Adaptive类，方法上面有@@Adaptive注解，生成代理类，然后URL传参的时候就获取对应的实现类
 ```java
 package com.apache.dubbo;
 
@@ -355,6 +362,7 @@ public class TestSpiIoc {
         System.out.println(a.getB().b(url));
     }
 }
+# 这里的B就是BImpl
 ```
 <font color='red'><b>下面就是通过dubbo生成的代理类，bOther()方法没有通过@Adaptive注解修饰，直接会抛异常，这里生成的方法没有调用是不会报错的。类名：
 接口名$Adaptive，然后看下b()方法，里面从url获取参数b，如果URL没有传参数，ioc注入是不会错的，只是代理类，但是调用方法，如果找不到的话，就会报错的。</b></font>
@@ -372,7 +380,7 @@ public class B$Adaptive implements com.apache.dubbo.api.B {
     public java.lang.String b(org.apache.dubbo.common.URL arg0) {
         if (arg0 == null) throw new IllegalArgumentException("url == null");
         org.apache.dubbo.common.URL url = arg0;
-        String extName = url.getParameter("b");
+        String extName = url.getParameter("b"); // ? 这里为什么会是b，带着疑问我们往下看
         if (extName == null)
             throw new IllegalStateException("Failed to get extension (com.apache.dubbo.api.B) name from url (" + url.toString() + ") use keys([b])");
         com.apache.dubbo.api.B extension = (com.apache.dubbo.api.B) ExtensionLoader.getExtensionLoader(com.apache.dubbo.api.B.class).getExtension(extName);
@@ -493,7 +501,7 @@ public class ExtensionLoader<T> {
 
 ```java
 /**
-* type是贯穿全局的，就是要操作的那个接口，这里要注意下，ExtensionLoader是根据type生成出来，不同的type的ExtensionLoader是不一样的，一样的type统一时间只会留一份
+* type是贯穿全局的，就是要操作的那个接口，这里要注意下，ExtensionLoader是根据type生成出来，不同的type的ExtensionLoader是不一样的，一样的type只会留一份
 * @param type
 * @param <T>
 * @return
