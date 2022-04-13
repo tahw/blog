@@ -15,7 +15,7 @@ categories:
 3. dubbo怎么注册服务的？
 
 ## 内容
-带着上面的问题，我们这个通过下面要描述的内容来解释
+带着上面的问题，我们通过下面要描述的内容来解释
 
 1. dubbo里面的properties文件解析
 2. dubbo里面的@Service解析
@@ -27,7 +27,7 @@ categories:
 
 <!-- more -->
 ## 入口
-我们通过dubbo源码的方式来知晓dubbo入口，我们也进一步来理解dubbo源码
+我们通过dubbo源码的方式来知晓dubbo入口，我们也进一步来理解dubbo源码，下面是dubbo-example例子下面的代码
 ```java
 public class Application {
     public static void main(String[] args) throws Exception {
@@ -356,7 +356,7 @@ public class ConfigurationBeanBindingRegistrar implements ImportBeanDefinitionRe
 
     /**
      * `@EnableDubbo` 流程走到这里，会调用这里，但是不是通过ConfigurationBeanBindingRegistrar.registerBeanDefinitions调用过来，是通过ConfigurationBeanBindingsRegister#registerBeanDefinitions调用过来，手动创建ConfigurationBeanBindingRegistrar，然后直接调用registerConfigurationBeanDefinitions方法
-     * 那这里还有个问题，其中的environment那是怎么来的？这里也是复制得来的
+     * 那这里还有个问题，其中的environment那是怎么来的？这里也是赋值得来的
      * ConfigurationBeanBindingRegistrar registrar = new ConfigurationBeanBindingRegistrar();
      * registrar.setEnvironment(environment)
      * @param attributes
@@ -542,7 +542,7 @@ dubbo.protocols.p2.host=0.0.0.0
 ProtocolConfig配置，这里是两个bean对象，beanName分别是p1和p2，对应name、port、host里面值
 
 #### 总结
-@EnableDubboConfig就是对properties属性解析，然后根据属性来生成对象bean，然后注册一些后置处理器和监听器，用于后续使用
+<font color='red'><b>@EnableDubboConfig就是对properties属性解析，然后根据属性来生成对象bean，然后注册一些后置处理器和监听器，用于后续使用</b></font>
 
 
 
@@ -635,7 +635,7 @@ public class DubboComponentScanRegistrar implements ImportBeanDefinitionRegistra
 ```
 
 ##### ServiceAnnotationBeanPostProcessor
-`ServiceAnnotationBeanPostProcessor`这个其实是`BeanFactoryBeanProcessor`，名字有意义，这个是注入bean的。
+`ServiceAnnotationBeanPostProcessor`这个其实是`BeanFactoryPostProcessor`，名字有意义，这个是注入bean的。
 这个作用有两个
 1. 就是去扫描类上面加了@Service注解，然后将其扫描成spring bean。
     1. 这个扫描器不仅扫描出来一个bd，还会生成额外的ServiceBean类，ServiceBean也会放入到spring中
@@ -717,7 +717,7 @@ public class ServiceAnnotationBeanPostProcessor implements BeanDefinitionRegistr
                  * 这里需要注意下，这里不仅是注册的DemoServiceImpl，也注册了ServiceBean
                  * 这里ServiceBean的意义在哪？
                  *  1. @Service 注解这么多配置，需要放在哪
-                 *  2. @Service 也需要启动服务
+                 *  2. @Service 也是一个服务
                  *  3. 跟原有的接口也有关系，ref关联DemoServiceImpl
                  *  4. 那这里应该有很多ServiceBean，一个被@Service注释的类，都会存在，这里就是ByName，class是一致的，但是beanName是不一样的，每个beanName就是
                  *  ServiceAnnotationBeanPostProcessor#generateServiceBeanName生成
@@ -879,7 +879,7 @@ ServiceBean里面有很多属性，例如
     }
 ```
 #### 总结
-1. 这个类就是扫描@Service类，然后注入对象spring容器，并且会生成ServiceBean放入到spring容器
+1. 这个类就是扫描@Service类，然后将该对象注入到spring容器，并且会生成对应的ServiceBean放入到spring容器
 
 
 ## @Reference处理
@@ -890,7 +890,7 @@ ServiceBean里面有很多属性，例如
 ### AbstractAnnotationBeanPostProcessor
 这个类是@Reference的核心，ReferenceAnnotationBeanPostProcessor继承AbstractAnnotationBeanPostProcessor，其实都是先处理AbstractAnnotationBeanPostProcessor，然后再调用到ReferenceAnnotationBeanPostProcessor。
 
-在将ReferenceAnnotationBeanPostProcessor注入spring容器是，会将AbstractAnnotationBeanPostProcessor里面annotationTypes就@Reference注解
+再将ReferenceAnnotationBeanPostProcessor注入spring容器里，会将AbstractAnnotationBeanPostProcessor里面annotationTypes就@Reference注解
 
 查询属性或者方法上找到注入点，然后就会调用到ReferenceAnnotationBeanPostProcessor的doGetInjectedBean方法得到对象，然后注入到属性对象里面
 
