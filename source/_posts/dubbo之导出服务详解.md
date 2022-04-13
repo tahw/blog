@@ -60,10 +60,10 @@ public class DubboBootstrapApplicationListener extends OneTimeExecutionApplicati
 在我们正式分析`dubboBootstrap.start`源码之前，我们先分析下dubbo服务导出应该做什么事情，先去思考然后去看源码会有思路
 ```text
 1. 启动服务netty或者tomcat
-2. 将服务注册到zk注册中心上面
+2. 将服务注册到注册中心（zk）上面
 
 在这两步之前其实还有
-0. 读取配置，读取最新最全的配置，大致逻辑我们清楚了，是否是这样的，我们可以看下
+0. 读取配置，读取最新最全的配置（例如配置中心的配置，系统环境变量值，-D的值等等）
 ```
 
 # dubboBootstrap.start
@@ -840,7 +840,7 @@ public class DubboBootstrapApplicationListener extends OneTimeExecutionApplicati
 其中`doLocalExport`就是导出服务，`register`往zk注册
 
 
-流程图
+整体流程图
 ![doExport](/images/dubbo-5-3-3.png)
 
 #### 启动服务
@@ -1156,7 +1156,7 @@ void handleRequest(final ExchangeChannel channel, Request req) throws RemotingEx
     }
 ```
 8. ExchangeHandlerAdapter
-<font color='red'><b>这个处理器是真正处理器，reply是返回对象的，真正返回对象的invoker.invoke执行的结果，而是received是不返回对象的，其中请求过来是Invocation对象，然后根据Invocation对象拿到serviceKey，然后再从exporterMap里面获取DubboExporter，然后真正获取Invoker，拿到Invoker后就会调用Invoker.invoke方法真正调用结果</b></font>
+<font color='red'><b>这个处理器是真正处理器，reply是返回对象的，真正返回对象的invoker.invoke执行的结果，而received是不返回对象的，其中请求过来是Invocation对象，然后根据Invocation对象拿到serviceKey，然后再从exporterMap里面获取DubboExporter，然后真正获取Invoker，拿到Invoker后就会调用Invoker.invoke方法真正调用结果</b></font>
 
 ```java
 private ExchangeHandler requestHandler = new ExchangeHandlerAdapter() {
