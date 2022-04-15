@@ -212,7 +212,7 @@ ps:这里在说明一点，是什么样的错误dubbo才会容错呢？如果是
 4. HeartbeatHandler.received，判断msg是心跳请求，是的话返回response，如果是心跳响应，不做什么，最后则调用下一层
 5. AllChannelHandler.received，把msg构建成ChannelEventRunnable，放到线程池里面，然后在ChannelEventRunnable里的run方法调用下一层
 6. DecodeHandler.received，反编译，设置RpcInvocation methodName、parameterTypes、arguments、attachments等属性，然后调用下一层
-7. <font color='red'><b>HeaderExchangeHandlerHeaderExchangeHandler.handleRequest方法，先构建Response对象，调用下层的ExchangeHandlerAdapter.reply方法返回CompletionStage对象，CompletionStage是CompletableFuture父类，然后CompletionStage.whenComplete方法绑定回调函数，当ExchangeHandlerAdapter.reply返回结果，就会设置Response对象，然后返回到消费者</b></font>
+7. <font color='red'><b>HeaderExchangeHandler.handleRequest方法，先构建Response对象，调用下层的ExchangeHandlerAdapter.reply方法返回CompletionStage对象，CompletionStage是CompletableFuture父类，然后CompletionStage.whenComplete方法绑定回调函数，当ExchangeHandlerAdapter.reply返回结果，就会设置Response对象，然后返回到消费者</b></font>
 8. ExchangeHandlerAdapter.reply，从exporter获取Invoker，然后执行Invoker.invoke
 9. 这里的就会执行ProtocolFilterWrapper$Invoker的Filter链，当Filter执行完返回结果后，就会执行Result#whenCompleteWithContext
 10. EchoFilter.invoke，判断当前请求是不是一个回声测试，如果是，则不后续调用了，否则调用下一层

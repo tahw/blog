@@ -587,7 +587,7 @@ private RouterChain(URL url) {
     initWithRouters(routers);
 }
 ```
-RouterChain是泛型，泛型是URL，每个URL榜单一个路由链，其中URL直接跟routers属性绑定 
+RouterChain是泛型，泛型是URL，每个URL绑定一个路由链，其中URL直接跟routers属性绑定 
 
 builtinRouters：
  1. {MockInvokersSelector@3917} ，Mock路由
@@ -793,7 +793,7 @@ public void subscribe(URL url) {
 ```
 7. 这个就是RegistryDirectory#notify，
     1. 如果获取到/configurators内容，就会放到configurators配置里，获取内容，监听，然后会调用refreshOverrideAndInvoker里的overrideDirectoryUrl方法重写URL
-    2. 如果获取到/routers内容，就会将入到RouterChain里面，调用的时候使用路由链
+    2. 如果获取到/routers内容，就会设置到RouterChain里面，调用的时候使用路由链
     3. 如果获取到/providers，就会调用refreshOverrideAndInvoker里的refreshInvoker获取Invoker
 ```java
 /**
