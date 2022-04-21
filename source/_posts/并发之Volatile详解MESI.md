@@ -1,4 +1,4 @@
-title: MESI
+title: 并发之Volatile详解MESI
 author: jianghe
 tags:
   - 并发
