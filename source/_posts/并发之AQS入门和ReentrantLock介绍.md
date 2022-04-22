@@ -1,4 +1,4 @@
-title: AQS
+title: 并发之AQS入门和ReentrantLock介绍
 author: jianghe
 tags:
   - 并发
@@ -8,7 +8,7 @@ date: 2021-05-26 19:30:00
 ---
 # 简介
 
-&nbsp;&nbsp;&nbsp;&nbsp;AQS是什么呢？`AbstractQueuedSynchronizer`简称AQS。java并发变成核心在于java.concurrent.util包而juc当中的大多数同步器实现都是围绕着共同的基础行为，比如等待队列、条件队列、独占获取、共享获取等。而这个行为都是都是aqs去做的。下面是aqs的官方介绍。
+&nbsp;&nbsp;&nbsp;&nbsp;AQS是什么呢？`AbstractQueuedSynchronizer`简称AQS。java并发编程核心在于java.concurrent.util包而juc当中的大多数同步器实现都是围绕着共同的基础行为，比如等待队列、条件队列、独占获取、共享获取等。而这个行为都是都是aqs去做的。下面是aqs的官方介绍。
 <pre>
 Provides a framework for implementing blocking locks 
 and related synchronizers (semaphores, events, etc) 
@@ -277,6 +277,30 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         sync.release(1);
     }
 }
+
+public abstract class AbstractQueuedSynchronizer
+    extends AbstractOwnableSynchronizer
+    implements java.io.Serializable {
+    // 省略....
+    /**
+     * Acquires in exclusive mode, ignoring interrupts.  Implemented
+     * by invoking at least once {@link #tryAcquire},
+     * returning on success.  Otherwise the thread is queued, possibly
+     * repeatedly blocking and unblocking, invoking {@link
+     * #tryAcquire} until success.  This method can be used
+     * to implement method {@link Lock#lock}.
+     *
+     * @param arg the acquire argument.  This value is conveyed to
+     *        {@link #tryAcquire} but is otherwise uninterpreted and
+     *        can represent anything you like.
+     */
+    public final void acquire(int arg) { // 这个方法详细看下下面介绍
+        if (!tryAcquire(arg) &&
+            acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+            selfInterrupt();
+    }
+}
+
 ```
 
 
