@@ -1,5 +1,5 @@
 ---
-title: 并发CountDownLatch&Semaphore详解
+title: 并发之AQS共享CountDownLatch&Semaphore详解
 date: 2021-07-07 12:42:20
 tags:
  - 并发
@@ -698,7 +698,7 @@ public final boolean releaseShared(int arg) {
 /**
     * 1. 判断当前CLH队列是否有两个节点，head和node节点
     * 2. 如果head节点是-1状态，则表示node节点肯定是入队等待了，现在将head设置为0，然后唤醒node节点
-    * 3. 如果head节点不是-1，有可能是node节点以及排队，但是还没有等待，然后更新h状态从0设置成-3，就没有其他
+    * 3. 如果head节点不是-1，有可能是node节点已经排队，但是还没有等待，然后更新h状态从0设置成-3，就没有其他
     *
     * Release action for shared mode -- signals successor and ensures
     * propagation. (Note: For exclusive mode, release just amounts

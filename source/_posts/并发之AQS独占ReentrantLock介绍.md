@@ -1,4 +1,4 @@
-title: 并发之AQS入门和ReentrantLock介绍
+title: 并发之AQS独占ReentrantLock介绍
 author: jianghe
 tags:
   - 并发
