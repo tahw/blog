@@ -1027,10 +1027,10 @@ private List<Runnable> drainQueue() { // 废弃队列，只有shutdownNow()的�
 
 
 ### RejectedExecutionHandler
-* CallerRunsPolicy
-* AbortPolicy
-* DiscardPolicy
-* DiscardOldestPolicy
+* CallerRunsPolicy（调用者运行）
+* AbortPolicy（直接抛弃&抛出异常）
+* DiscardPolicy（直接抛弃）
+* DiscardOldestPolicy（抛弃队列里面最老的）
 
 
 #### CallerRunsPolicy
