@@ -1,5 +1,5 @@
 ---
-title: ConcurrentHashMap详解
+title: 并发之ConcurrentHashMap详解
 date: 2021-07-30 11:12:43
 tags:
     - 并发
@@ -676,7 +676,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     /**
      * Table of counter cells. When non-null, size is a power of 2.
      */
-    private transient volatile CounterCell[] counterCells; // size里帮组计算的计算单元
+    private transient volatile CounterCell[] counterCells; // size里帮助计算的计算单元
 
     /**
      * Nodes for use in TreeBins
