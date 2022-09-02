@@ -84,6 +84,15 @@ Database transactions, as implemented by InnoDB, have properties that are collec
 
 ![幻读](/images/mysql-5-4.png)
 
+## 脏读、不可重复读、幻读的区别
+<font color='red'><b>
+
+1. 不可重复读强调的是同一事务下，两次读取的数据不一样
+2. 幻读强调的是另外一个事务是新增或者删除，两次读取的记录不一样
+3. 脏读强调的是另外一个事务是修改，读的不够新
+
+</b></font>
+
 # 锁
 锁也是解决多个事务产生问题的一种方式
 
